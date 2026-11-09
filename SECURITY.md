@@ -38,7 +38,7 @@ code units, not UTF-8 bytes.
 | Complete record, including truncation marker and LF | 16,384 units |
 | Encoded value | 4,096 units |
 | Encoded custom key (namespace separate) | 256 units, otherwise the field is skipped |
-| Context callback / fluent fields | 32 from each source |
+| Context providers / fluent fields | 32 distinct keys across all providers / 32 event pairs, at most 64 merged keys |
 | Array nesting / elements per array | 8 / 32 |
 | Throwable graph / total stack frames | 8 throwables / 64 frames |
 | Suppressed exceptions per throwable | 4 |
@@ -52,13 +52,16 @@ fallback. Unsafe formatting patterns produce an escaped rejection marker.
 System.Logger arguments are bounded before MessageFormat expansion. Large
 numeric values are not expanded without bounds. No input-sized formatter or
 class-name cache is retained. Balsa retains no marker state. A context callback
-must emit distinct keys and must not retain or asynchronously use its consumer;
-late calls after the callback returns are ignored.
+must not retain or asynchronously use its consumer; late calls after it returns
+are ignored. Providers run in ascending order, with fluent fields applied last.
+A bounded temporary map merges duplicate keys before encoding, so overridden
+objects are not rendered and each label appears once. Key lengths are checked
+before hashing or retaining keys in that map.
 
 ## Failures and reentry
 
 Invalid root configuration, invalid journald settings, or
-multiple configuration providers disable logging instead of falling back to
+multiple configuration providers or invalid service constructors/order methods disable logging instead of falling back to
 another backend. An MDC factory failure disables logging when SLF4J initializes;
 System.Logger alone never requests that adapter. Bad per-name configuration disables that logger. One fixed
 LTSV diagnostic reports the failure without printing property values, provider
@@ -74,7 +77,7 @@ As with any in-process logger, application callbacks are code, not a sandbox.
 They can block or allocate before returning. This includes toString, suppliers,
 context providers, MDC adapters, resource bundles, throwable accessors, and code evaluated by a
 facade before it reaches the backend. Throwable accessors may clone arrays.
-An opt-in BalsaConfig.MDCAdapter controls its own storage. Its JDK-only contract
+An opt-in BalsaService.BalsaConfig.MDCAdapter controls its own storage. Its JDK-only contract
 is bridged by the SLF4J provider, which is loaded only when SLF4J is used.
 System.Logger and configuration discovery also work with the SLF4J API absent. Stdout I/O can block, and output
 errors follow PrintStream's error-handling semantics. Balsa's own output and

@@ -4,7 +4,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
-import io.jstach.balsa.BalsaProvider;
+import io.jstach.balsa.spi.BalsaProvider;
 import org.openjdk.jmh.annotations.*;
 import org.slf4j.Logger;
 import org.slf4j.simple.SimpleServiceProvider;

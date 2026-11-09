@@ -1,4 +1,8 @@
-package io.jstach.balsa;
+package io.jstach.balsa.spi;
+
+import io.jstach.balsa.Balsa;
+import io.jstach.balsa.BalsaLog;
+import io.jstach.balsa.spi.BalsaService.BalsaConfig;
 
 import java.util.Objects;
 import java.util.Map;

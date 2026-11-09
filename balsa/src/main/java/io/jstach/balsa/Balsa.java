@@ -3,13 +3,18 @@ package io.jstach.balsa;
 import java.lang.System.Logger.Level;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.ArrayList;
+import java.util.Comparator;
+import io.jstach.balsa.spi.BalsaService;
+import io.jstach.balsa.spi.BalsaService.BalsaConfig;
+import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
 import java.util.ResourceBundle;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-final class Balsa {
+public final class Balsa {
 
 	static final ThreadLocal<Boolean> ACTIVE = new ThreadLocal<>();
 
@@ -21,6 +26,8 @@ final class Balsa {
 
 	private BalsaConfig config;
 
+	private KeyValuesProvider[] keyValues;
+
 	private int rootLevel;
 
 	private boolean journal;
@@ -28,7 +35,7 @@ final class Balsa {
 	private Balsa() {
 	}
 
-	static Balsa instance() {
+	public static Balsa instance() {
 		INSTANCE.initialize();
 		return INSTANCE;
 	}
@@ -43,18 +50,28 @@ final class Balsa {
 		}
 		// No application code under an initialization monitor or class-init lock.
 		try {
-			var providers = ServiceLoader.load(BalsaConfig.class, BalsaConfig.class.getClassLoader())
-				.stream()
-				.iterator();
-			var provider = providers.hasNext() ? providers.next() : null;
-			if (providers.hasNext())
-				throw new IllegalStateException("Multiple BalsaConfig providers");
-			BalsaConfig selected = provider == null ? new BalsaConfig() : provider.get();
+			BalsaConfig selected = null;
+			var contributors = new ArrayList<KeyValuesProvider>();
+			for (var service : ServiceLoader.load(BalsaService.class, BalsaService.class.getClassLoader())) {
+				if (service instanceof BalsaConfig settings) {
+					if (selected != null)
+						throw new IllegalStateException("Multiple BalsaConfig providers");
+					selected = settings;
+				}
+				else if (service instanceof KeyValuesProvider values)
+					contributors.add(values);
+			}
+			if (selected == null)
+				selected = new BalsaConfig();
+			contributors.sort(Comparator.comparingInt(KeyValuesProvider::order));
+			KeyValuesProvider[] values = contributors.toArray(KeyValuesProvider[]::new);
+
 			Level level = selected.levelOrNull("");
 			String prefix = selected.propertyOrNull("balsa.journald");
 			if (prefix != null && !prefix.equalsIgnoreCase("true") && !prefix.equalsIgnoreCase("false"))
 				throw new IllegalArgumentException("Invalid journald option");
 			config = selected;
+			keyValues = values;
 			rootLevel = level == null ? Level.INFO.getSeverity() : level.getSeverity();
 			journal = "true".equalsIgnoreCase(prefix);
 			state = 2;
@@ -144,10 +161,11 @@ final class Balsa {
 				out.start("error");
 				out.throwable(thrown);
 			}
-			out.keyValues(config);
+			for (var provider : keyValues)
+				out.keyValues(provider);
 			if (eventValues != null)
 				eventValues.accept(out);
-
+			out.writeKeyValues();
 			print(out);
 		}
 		catch (Throwable failure) {
@@ -159,11 +177,11 @@ final class Balsa {
 		}
 	}
 
-	BalsaConfig configuration() {
+	public BalsaConfig configuration() {
 		return state == 2 ? config : null;
 	}
 
-	void disable() {
+	public void disable() {
 		state = 3;
 		report("Balsa disabled: invalid configuration");
 	}
@@ -191,7 +209,7 @@ final class Balsa {
 	}
 
 	@SuppressWarnings("removal") // Preserve fatal-error behavior for legacy ThreadDeath.
-	static void nonFatal(Throwable failure) {
+	public static void nonFatal(Throwable failure) {
 		for (int depth = 0; failure != null && depth < 8; depth++) {
 			if (failure instanceof VirtualMachineError fatal && !(failure instanceof StackOverflowError))
 				throw fatal;

@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.text.MessageFormat;
 import org.junit.jupiter.api.Test;
+import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.helpers.MessageFormatter;
@@ -145,7 +146,7 @@ class LtsvTest {
 	@Test
 	void keyValueCallbacksAreBoundedAndTheirConsumerExpiresAfterTheCall() {
 		var retained = new java.util.concurrent.atomic.AtomicReference<java.util.function.BiConsumer<String, String>>();
-		var config = new BalsaConfig() {
+		var config = new KeyValuesProvider() {
 			@Override
 			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
 				retained.set(consumer);
@@ -156,11 +157,90 @@ class LtsvTest {
 		var out = new Ltsv(-1);
 		out.keyValues(config);
 		retained.get().accept("late", "ignored");
+		out.writeKeyValues();
 		String record = out.finish();
 		assertEquals(33, record.stripTrailing().split("\t").length);
 		assertTrue(record.endsWith("\ttruncated:true\n"));
 		assertFalse(record.contains("late"));
-		assertFalse(record.contains("context.key32:"));
+		assertFalse(record.contains("kv.key32:"));
+	}
+
+	@Test
+	void eventValuesOverrideContextAndDuplicateEventKeysWithoutRenderingDiscardedObjects() {
+		var out = new Ltsv(-1);
+		out.keyValues(new KeyValuesProvider() {
+			@Override
+			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+				consumer.accept("request", "outer");
+				consumer.accept("request", "inner");
+			}
+		});
+		out.eventValue("request", new Object() {
+			@Override
+			public String toString() {
+				throw new AssertionError("discarded value evaluated");
+			}
+		});
+		out.eventValue("request", "event");
+		out.writeKeyValues();
+		assertEquals("""
+				kv.request:event
+				""", out.finish());
+	}
+
+	@Test
+	void mergedContextAndEventFieldsHaveFixedBudgetsAndIgnoreInvalidKeyValues() {
+		var out = new Ltsv(-1);
+		out.keyValues(new KeyValuesProvider() {
+			@Override
+			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+				for (int i = 0; i < 32; i++)
+					consumer.accept("context" + i, "value");
+			}
+		});
+		for (int i = 0; i < 32; i++)
+			out.eventValue("event" + i, "value");
+		var hostile = new Object() {
+			@Override
+			public String toString() {
+				throw new AssertionError("rejected field evaluated");
+			}
+		};
+		out.eventValue("overflow", hostile);
+		out.eventValue("x".repeat(1_000_000), hostile);
+		out.writeKeyValues();
+		String record = out.finish();
+		assertEquals(65, record.stripTrailing().split("\t").length);
+		assertTrue(record.contains("kv.context31:value"));
+		assertTrue(record.contains("kv.event31:value"));
+		assertFalse(record.contains("overflow"));
+		assertFalse(record.contains("toString failed"));
+		assertTrue(record.endsWith("\ttruncated:true\n"));
+	}
+
+	@Test
+	void multipleProvidersShareTheContextBudgetWhileAllowingOverrides() {
+		var out = new Ltsv(-1);
+		out.keyValues(new KeyValuesProvider() {
+			@Override
+			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+				for (int i = 0; i < 32; i++)
+					consumer.accept("key" + i, "original");
+			}
+		});
+		out.keyValues(new KeyValuesProvider() {
+			@Override
+			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+				consumer.accept("key0", "override");
+				consumer.accept("overflow", "ignored");
+			}
+		});
+		out.writeKeyValues();
+		String record = out.finish();
+		assertEquals(33, record.stripTrailing().split("\t").length);
+		assertTrue(record.startsWith("kv.key0:override\t"));
+		assertFalse(record.contains("overflow"));
+		assertTrue(record.endsWith("\ttruncated:true\n"));
 	}
 
 	@Test

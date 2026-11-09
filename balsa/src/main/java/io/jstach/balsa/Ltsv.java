@@ -5,6 +5,9 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.MessageFormat;
 import java.util.Date;
+import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 final class Ltsv implements BiConsumer<String, String> {
@@ -19,7 +22,7 @@ final class Ltsv implements BiConsumer<String, String> {
 
 	private int end, frames, throwables, fields;
 
-	private int contextFields;
+	private Map<String, Object> keyValues;
 
 	private boolean collecting;
 
@@ -303,10 +306,10 @@ final class Ltsv implements BiConsumer<String, String> {
 		return mask;
 	}
 
-	void keyValues(BalsaConfig config) {
+	void keyValues(KeyValuesProvider provider) {
 		collecting = true;
 		try {
-			config.keyValues(this);
+			provider.keyValues(this);
 		}
 		finally {
 			collecting = false;
@@ -315,14 +318,38 @@ final class Ltsv implements BiConsumer<String, String> {
 
 	@Override
 	public void accept(String key, String value) {
-		if (!collecting)
-			return;
-		if (contextFields == 32 || !room()) {
+		if (collecting)
+			put(key, value, 32);
+	}
+
+	void eventValue(String key, Object value) {
+		put(key, value, 64);
+	}
+
+	private void put(String key, Object value, int limit) {
+		if (key == null || key.length() > KEY) {
 			truncated = true;
 			return;
 		}
-		contextFields++;
-		extra("context.", key, value);
+		if (keyValues == null)
+			keyValues = new LinkedHashMap<>();
+		if (keyValues.size() >= limit && !keyValues.containsKey(key)) {
+			truncated = true;
+			return;
+		}
+		keyValues.put(key, value);
+	}
+
+	void writeKeyValues() {
+		if (keyValues == null)
+			return;
+		for (var entry : keyValues.entrySet()) {
+			if (!room()) {
+				truncated = true;
+				break;
+			}
+			extra("kv.", entry.getKey(), entry.getValue());
+		}
 	}
 
 	void extra(String prefix, String key, Object value) {

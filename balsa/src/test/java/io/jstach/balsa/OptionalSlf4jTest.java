@@ -40,7 +40,7 @@ class OptionalSlf4jTest {
 	private String run(boolean modular, boolean observableApi, String provider, String scenario) throws Exception {
 		Path folder = Files.createTempDirectory(temp, "child-");
 		if (provider != null) {
-			Path descriptor = folder.resolve("META-INF/services/io.jstach.balsa.BalsaConfig");
+			Path descriptor = folder.resolve("META-INF/services/io.jstach.balsa.spi.BalsaService");
 			Files.createDirectories(descriptor.getParent());
 			Files.writeString(descriptor, provider);
 		}
@@ -66,7 +66,7 @@ class OptionalSlf4jTest {
 		String loaded = Files.readString(trace);
 		assertTrue(loaded.contains("io.jstach.balsa.BalsaSystemLogger"));
 		assertFalse(loaded.contains("org.slf4j."));
-		assertFalse(loaded.contains("io.jstach.balsa.BalsaProvider"));
+		assertFalse(loaded.contains("io.jstach.balsa.spi.BalsaProvider"));
 		return output;
 	}
 
@@ -97,9 +97,10 @@ class OptionalSlf4jTest {
 	@CsvSource({ "false,false", "true,false", "true,true" })
 	void spiAndContextWorkWithoutLoadingAnySlf4jTypes(boolean modular, boolean observableApi) throws Exception {
 		assertEquals("""
-				level:INFO\tthread:main\tlogger:system\tmessage:system only\tcontext.source:direct
-				level:WARN\tthread:main\tlogger:system\tmessage:argument value\tcontext.source:direct
-				""", run(modular, observableApi, "balsa.smoke.SystemOnlySmoke$Settings", "basic"));
+				level:INFO\tthread:main\tlogger:system\tmessage:system only\tkv.source:direct
+				level:WARN\tthread:main\tlogger:system\tmessage:argument value\tkv.source:direct
+				""", run(modular, observableApi,
+				"balsa.smoke.SystemOnlySmoke$Settings\nbalsa.smoke.SystemOnlySmoke$Values", "basic"));
 	}
 
 	@ParameterizedTest
@@ -119,6 +120,35 @@ class OptionalSlf4jTest {
 				""", failure);
 	}
 
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void oneDiscoveryPassBuildsOrderedProvidersOnceAndKeepsEqualOrdersStable(boolean modular) throws Exception {
+		String services = """
+				balsa.smoke.SystemOnlySmoke$HighValues
+				balsa.smoke.SystemOnlySmoke$CountingConfig
+				balsa.smoke.SystemOnlySmoke$SecondValues
+				balsa.smoke.SystemOnlySmoke$FirstValues
+				balsa.smoke.SystemOnlySmoke$LowValues
+				""";
+		String output = run(modular, false, services, "services");
+		String record = """
+				level:INFO\tthread:main\tlogger:system\tmessage:services\tkv.winner:high\tkv.low.instances:1\tkv.tie:first\tkv.high.instances:1\tkv.config.instances:1
+				""";
+		assertEquals(record.repeat(2), output);
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void badProviderOrderingDisablesLoggingWithoutExposingTheFailure(boolean modular) throws Exception {
+		String services = """
+				balsa.smoke.SystemOnlySmoke$BadOrder
+				balsa.smoke.SystemOnlySmoke$LowValues
+				""";
+		assertEquals("""
+				level:ERROR\tlogger:io.jstach.balsa\tmessage:Balsa disabled: invalid configuration
+				""", run(modular, false, services, "basic"));
+	}
+
 	@Test
 	void namedApplicationCompilesAndDiscoversConfigWithoutTheSlf4jJar() throws Exception {
 		Path source = temp.resolve("source"), app = source.resolve("sample/app/Main.java");
@@ -126,18 +156,29 @@ class OptionalSlf4jTest {
 		Files.writeString(source.resolve("module-info.java"), """
 				module sample.app {
 				  requires io.jstach.balsa;
-				  provides io.jstach.balsa.BalsaConfig with sample.app.Settings;
+				  provides io.jstach.balsa.spi.BalsaService with sample.app.Settings, sample.app.Values;
 				}
 				""");
 		Files.writeString(source.resolve("sample/app/Settings.java"), """
 				package sample.app;
-				public final class Settings extends io.jstach.balsa.BalsaConfig {
+				public final class Settings extends io.jstach.balsa.spi.BalsaService.BalsaConfig {
 				  public Settings() {}
+				  @Override public System.Logger.Level levelOrNull(String name) {
+				    return name.isEmpty() ? System.Logger.Level.DEBUG : null;
+				  }
+				}
+				""");
+		Path values = source.resolve("sample/app/Values.java");
+		Files.writeString(values, """
+				package sample.app;
+				public final class Values extends io.jstach.balsa.spi.BalsaService.KeyValuesProvider {
+				  public Values() {}
 				  @Override public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
 				    consumer.accept("app", "named");
 				  }
 				}
 				""");
+
 		Files.writeString(app,
 				"""
 						package sample.app;
@@ -146,7 +187,7 @@ class OptionalSlf4jTest {
 						    if (ModuleLayer.boot().findModule("org.slf4j").isPresent()) throw new AssertionError("SLF4J resolved");
 						    try { Class.forName("org.slf4j.Logger"); throw new AssertionError("SLF4J present"); }
 						    catch (ClassNotFoundException expected) {}
-						    System.getLogger("app").log(System.Logger.Level.INFO, "named application");
+						    System.getLogger("app").log(System.Logger.Level.DEBUG, "named application");
 						  }
 						}
 						""");
@@ -154,13 +195,36 @@ class OptionalSlf4jTest {
 		var compiler = List.of(Path.of(System.getProperty("java.home"), "bin", "javac").toString(), "--release", "21",
 				"--module-path", jar().toString(), "-d", classes.toString(),
 				source.resolve("module-info.java").toString(), source.resolve("sample/app/Settings.java").toString(),
-				app.toString());
+				values.toString(), app.toString());
 		assertEquals("", launch(compiler, temp));
 		String output = launch(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
 				"--module-path", jar() + File.pathSeparator + classes, "-m", "sample.app/sample.app.Main"), temp);
 		assertEquals("""
-				level:INFO\tthread:main\tlogger:app\tmessage:named application\tcontext.app:named
+				level:DEBUG\tthread:main\tlogger:app\tmessage:named application\tkv.app:named
 				""", output);
+	}
+
+	@Test
+	void namedApplicationsCannotAccessTheImplementationPackage() throws Exception {
+		Path sources = temp.resolve("hidden"), app = sources.resolve("sample/Main.java");
+		Files.createDirectories(app.getParent());
+		Files.writeString(sources.resolve("module-info.java"), "module sample.app { requires io.jstach.balsa; }");
+		Files.writeString(app, "package sample; public class Main { io.jstach.balsa.Balsa implementation; }");
+		Path diagnostics = temp.resolve("hidden-errors");
+		var compiler = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "javac").toString(),
+				"--release", "21", "--module-path", jar().toString(), "-d", temp.resolve("hidden-classes").toString(),
+				sources.resolve("module-info.java").toString(), app.toString())
+			.redirectErrorStream(true)
+			.redirectOutput(diagnostics.toFile())
+			.start();
+		try {
+			assertTrue(compiler.waitFor(30, TimeUnit.SECONDS));
+			assertNotEquals(0, compiler.exitValue(), "implementation package was exported");
+			assertTrue(Files.readString(diagnostics).contains("io.jstach.balsa"));
+		}
+		finally {
+			compiler.destroyForcibly();
+		}
 	}
 
 }

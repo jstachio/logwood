@@ -1,6 +1,6 @@
 package io.jstach.balsa.slf4j;
 
-import io.jstach.balsa.BalsaConfig;
+import io.jstach.balsa.spi.BalsaService.BalsaConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
 import java.io.File;
@@ -33,7 +33,7 @@ class RuntimeTest {
 			throws Exception {
 		Path folder = Files.createTempDirectory(temp, "process-");
 		if (provider != null) {
-			Path descriptor = folder.resolve("META-INF/services/io.jstach.balsa.BalsaConfig");
+			Path descriptor = folder.resolve("META-INF/services/io.jstach.balsa.spi.BalsaService");
 			Files.createDirectories(descriptor.getParent());
 			Files.writeString(descriptor, provider, StandardCharsets.UTF_8);
 		}
@@ -77,7 +77,7 @@ class RuntimeTest {
 			String trace = Files.readString(initialization);
 			assertTrue(trace.contains("Initializing 'io/jstach/balsa/Balsa'"), trace);
 			for (String type : List.of("org/slf4j/LoggerFactory", "org/slf4j/MDC", "org/slf4j/MarkerFactory",
-					"io/jstach/balsa/BalsaProvider"))
+					"io/jstach/balsa/spi/BalsaProvider"))
 				assertFalse(trace.contains("Initializing '" + type + "'"),
 						type + " initialized during System.Logger use");
 		}
@@ -145,22 +145,22 @@ class RuntimeTest {
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
 	void configurationSpiMdcAndBootstrapAreShared(boolean modular) throws Exception {
-		String provider = "balsa.smoke.Smoke$MdcConfig";
+		String provider = "balsa.smoke.Smoke$MdcConfig\nbalsa.smoke.Smoke$MdcValues";
 		var records = run("spi", modular, provider);
 		assertEquals(List.of("custom", "early after initialization"),
 				records.stream().map(r -> r.get("message")).toList());
 		records = run("mdc", modular, provider);
 		assertEquals("INFO", records.get(0).get("level"));
-		assertEquals("spoof", records.get(0).get("context.level"));
-		assertEquals("v\n", records.get(0).get("context.a%3a%09"));
 		assertEquals("also spoof", records.get(0).get("kv.level"));
-		assertFalse(run("mdc", modular, null).get(0).containsKey("context.level"));
+		assertEquals("v\n", records.get(0).get("kv.a%3a%09"));
+		assertEquals("also spoof", records.get(0).get("kv.level"));
+		assertFalse(run("mdc", modular, null).get(0).containsKey("kv.a%3a%09"));
 	}
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
 	void slf4jMdcDelegatesToTheJdkOnlyStorageContract(boolean modular) throws Exception {
-		var records = run("mdc-contract", modular, "balsa.smoke.Smoke$MdcConfig");
+		var records = run("mdc-contract", modular, "balsa.smoke.Smoke$MdcConfig\nbalsa.smoke.Smoke$MdcValues");
 		assertEquals(1, records.size());
 		assertEquals("MDC bridge passed", records.getFirst().get("message"));
 		records = run("mdc-noop", modular, null);
@@ -254,10 +254,15 @@ class RuntimeTest {
 	void systemLoggerNeverInitializesSlf4jFacadesOrCreatesItsAdapter(boolean modular, String provider)
 			throws Exception {
 		traceInitialization = true;
-		var records = run("system-only", modular, provider.equals("default") ? null : "balsa.smoke.Smoke$" + provider);
+		String services = provider.equals("default") ? null : "balsa.smoke.Smoke$" + provider;
+		if (provider.equals("SystemOnlyConfig"))
+			services += "\nbalsa.smoke.Smoke$SystemValues";
+		if (provider.equals("MdcConfig"))
+			services += "\nbalsa.smoke.Smoke$MdcValues";
+		var records = run("system-only", modular, services);
 		assertEquals(List.of("system only", "argument value"), records.stream().map(r -> r.get("message")).toList());
 		if (provider.equals("SystemOnlyConfig"))
-			assertEquals("direct", records.getFirst().get("context.source"));
+			assertEquals("direct", records.getFirst().get("kv.source"));
 		if (provider.equals("default"))
 			assertEquals("""
 					level:INFO\tthread:main\tlogger:system\tmessage:system only
@@ -269,11 +274,11 @@ class RuntimeTest {
 	@ValueSource(booleans = { false, true })
 	void contextCallbackWorksWithoutSlf4jAndDoesNotLeakAfterScope(boolean modular) throws Exception {
 		traceInitialization = true;
-		var records = run("context", modular, "balsa.smoke.Smoke$CallbackConfig");
-		assertEquals("spoof", records.getFirst().get("context.level"));
-		assertEquals("v\n\u001b[8m", records.getFirst().get("context.a%3a%09"));
+		var records = run("context", modular, "balsa.smoke.Smoke$CallbackValues");
+		assertEquals("spoof", records.getFirst().get("kv.level"));
+		assertEquals("v\n\u001b[8m", records.getFirst().get("kv.a%3a%09"));
 		assertEquals("INFO", records.getFirst().get("level"));
-		assertFalse(records.get(1).containsKey("context.level"));
+		assertFalse(records.get(1).containsKey("kv.level"));
 	}
 
 	@ParameterizedTest
@@ -291,7 +296,7 @@ class RuntimeTest {
 	@ValueSource(booleans = { false, true })
 	void contextCallbackFailuresAreContainedWithoutRecursingOrLeakingDetails(boolean modular) throws Exception {
 		traceInitialization = true;
-		var records = run("system-only", modular, "balsa.smoke.Smoke$BadContextConfig");
+		var records = run("system-only", modular, "balsa.smoke.Smoke$BadContextValues");
 		assertEquals(1, records.size());
 		assertEquals("Balsa could not encode a log event", records.getFirst().get("message"));
 	}
@@ -312,14 +317,14 @@ class RuntimeTest {
 		Files.writeString(moduleInfo, """
 				module test.config {
 				  requires io.jstach.balsa;
-				  provides io.jstach.balsa.BalsaConfig with test.config.Settings;
+				  provides io.jstach.balsa.spi.BalsaService with test.config.Settings;
 				}
 				""");
 		Path config = sources.resolve("Settings.java");
 		Files.writeString(config, """
 				package test.config;
 
-				public final class Settings extends io.jstach.balsa.BalsaConfig {
+				public final class Settings extends io.jstach.balsa.spi.BalsaService.BalsaConfig {
 				  public Settings() {}
 				  @Override public System.Logger.Level levelOrNull(String name) {
 				    return name.isEmpty() ? System.Logger.Level.OFF : null;

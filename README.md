@@ -101,61 +101,86 @@ Failure diagnostics are independent of application thresholds.
 
 ### The application SPI
 
-Register zero or one `io.jstach.balsa.BalsaConfig` provider. It can supply levels,
-property values, context key/value pairs, and the SLF4J MDC adapter.
-`keyValues(BiConsumer<String, String>)` pushes context directly during each event.
-Its default is empty. The callback can read scoped storage without making an MDC
-map or invoking any SLF4J facade. It must run synchronously, must not retain the
-consumer, and must emit distinct keys.
+`io.jstach.balsa.spi` is the core module's only exported package. Its sealed
+`BalsaService` interface has two non-sealed nested base classes:
 
-Balsa's System.Logger path does not initialize `LoggerFactory`, `MDC`,
-`MarkerFactory`, or `BalsaProvider`. It never calls `createMDCAdapter()`.
-SLF4J initialization requests that adapter separately. The default null result
-selects the no-op bridge. `BalsaConfig.MDCAdapter` is Balsa's own JDK-only contract,
-not an SLF4J type. A custom adapter supplies storage for map operations;
-the SLF4J provider delegates those operations to it. SLF4J deque operations are no-ops.
-The map accessor must return a copy and
-`setContextMap(null)` must clear context. To include MDC in either API's output,
-read a provider-owned adapter in `keyValues` rather than invoking the static MDC
-facade. Context itself does not depend on MDC. For example, a config can push
-application fields directly:
+* `BalsaService.BalsaConfig` supplies levels, properties, and optional MDC storage.
+  Register zero or one configuration; the default applies when none is present.
+* `BalsaService.KeyValuesProvider` pushes fields through
+  `keyValues(BiConsumer<String, String>)`. Register any number of providers.
+  `order()` defaults to zero; providers run in ascending order and later values
+  override earlier values for the same key. Equal orders retain discovery order,
+  so choose distinct orders when override precedence matters.
+
+Balsa makes one ServiceLoader pass over `BalsaService`, constructs services once,
+selects their roles with instanceof, and sorts key-value providers once during
+initialization. The loader uses Balsa's class loader, not a per-request context
+class loader. Constructors and order methods must not depend on logging.
+Bootstrap calls are suppressed until initialization completes; SLF4J itself may
+separately buffer bootstrap calls.
+
+For example, application fields can be supplied independently of configuration:
 
 ```java
-import io.jstach.balsa.BalsaConfig;
+import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
 import java.util.function.BiConsumer;
 
-public final class MyConfig extends BalsaConfig {
+public final class MyValues extends KeyValuesProvider {
   @Override public void keyValues(BiConsumer<String, String> consumer) {
     consumer.accept("service", "example");
   }
 }
 ```
 
-On the classpath, put its fully qualified name in
-`META-INF/services/io.jstach.balsa.BalsaConfig`. On the module path:
+Custom settings use the other base class:
 
 ```java
-module my.config {
+import io.jstach.balsa.spi.BalsaService.BalsaConfig;
+
+public final class MyConfig extends BalsaConfig {
+  @Override public System.Logger.Level levelOrNull(String name) {
+    return name.isEmpty() ? System.Logger.Level.WARNING : super.levelOrNull(name);
+  }
+}
+```
+
+On the classpath, list all services in
+`META-INF/services/io.jstach.balsa.spi.BalsaService`:
+
+```text
+my.app.MyConfig
+my.app.MyValues
+```
+
+On the module path:
+
+```java
+module my.app {
   requires io.jstach.balsa;
-  provides io.jstach.balsa.BalsaConfig with my.config.MyConfig;
+  provides io.jstach.balsa.spi.BalsaService with my.app.MyConfig, my.app.MyValues;
 }
 ```
 
 `levelOrNull(name)` returns null to inherit, including the empty name for the
-root. Override it to replace property-based level selection. The provider is
-loaded once through Balsa's class loader, not a per-request context class loader.
-Avoid logging or depending on logging during provider construction. Bootstrap
-calls into Balsa are suppressed and become usable after initialization;
-SLF4J itself may separately buffer bootstrap calls.
+root. Override it to replace property-based level selection. Key-value callbacks
+run synchronously and must not retain their consumer. All providers share the
+32-key context budget. Context and fluent fields share `kv.` labels; fluent
+fields have final precedence, the last event value wins, and each label is emitted
+once. A bounded temporary map is created only when fields exist. Balsa retains
+no context map between records. Built-in metadata remains separate. Labels use
+injective percent-encoded UTF-8, including literal percent signs and malformed UTF-16.
 
-Context fields use `context.` and fluent key/value fields use `kv.`. A user field named
-`level` therefore cannot replace the built-in `level`. Labels are percent-encoded
-UTF-8; literal percent signs and malformed UTF-16 are encoded distinctly.
+Balsa's System.Logger path loads no SLF4J classes and never calls
+`BalsaConfig.createMDCAdapter()`. The adapter is a JDK-only storage contract
+under `BalsaService.BalsaConfig.MDCAdapter`; null selects the no-op bridge.
+A custom adapter supplies map operations, with copy accessors and
+`setContextMap(null)` clearing context. SLF4J deque operations are no-ops.
+To include MDC in records, a separate KeyValuesProvider can read the same
+application-owned adapter. Context providers can instead read scoped storage
+without MDC or any logging facade.
 
 The SLF4J and JDK provider registrations are integration requirements, not extra
-application extension points. Both APIs share the same configuration and context callback. The SLF4J contract
-requires a marker factory; the standard helper supplies it, but Balsa never reads
-or emits markers.
+application service discovery passes. Markers are ignored.
 
 ## Security and size
 
@@ -167,7 +192,7 @@ records have fixed limits; clipping is explicit as `truncated:true`.
 Balsa retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
 
-The core has eight class files plus `module-info.class`; optional JPMS SLF4J
+The core has ten class files plus `module-info.class`; optional JPMS SLF4J
 registration adds one class and its descriptor. Runtime jars omit
 compiler debugging tables, Maven descriptors, and build-environment manifest fields. To build with source/line
 information for debugging:

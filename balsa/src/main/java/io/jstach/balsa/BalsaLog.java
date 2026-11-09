@@ -6,7 +6,7 @@ import org.slf4j.event.LoggingEvent;
 import org.slf4j.helpers.LegacyAbstractLogger;
 import org.slf4j.spi.LoggingEventAware;
 
-final class BalsaLog extends LegacyAbstractLogger implements LoggingEventAware {
+public final class BalsaLog extends LegacyAbstractLogger implements LoggingEventAware {
 
 	private static final long serialVersionUID = 1L;
 
@@ -14,7 +14,7 @@ final class BalsaLog extends LegacyAbstractLogger implements LoggingEventAware {
 
 	private transient volatile int threshold = -1;
 
-	BalsaLog(String name, Balsa balsa) {
+	public BalsaLog(String name, Balsa balsa) {
 		this.name = name;
 		this.balsa = balsa;
 	}
@@ -107,7 +107,7 @@ final class BalsaLog extends LegacyAbstractLogger implements LoggingEventAware {
 			int count = Math.min(pairs.size(), 32);
 			for (int i = 0; i < count && out.room(); i++) {
 				var pair = pairs.get(i);
-				out.extra("kv.", pair.key, pair.value);
+				out.eventValue(pair.key, pair.value);
 			}
 			if (pairs.size() > count)
 				out.truncated = true;

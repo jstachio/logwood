@@ -6,7 +6,8 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import io.jstach.balsa.BalsaConfig;
+import io.jstach.balsa.spi.BalsaService.BalsaConfig;
+import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
 
 public final class Smoke {
 
@@ -30,12 +31,12 @@ public final class Smoke {
 			}
 			case "context" -> {
 				var logger = System.getLogger("system");
-				CallbackConfig.CONTEXT.set(Map.of("level", "spoof", "a:\t", "v\n\u001b[8m"));
+				CallbackValues.CONTEXT.set(Map.of("level", "spoof", "a:\t", "v\n\u001b[8m"));
 				try {
 					logger.log(Level.INFO, "with context");
 				}
 				finally {
-					CallbackConfig.CONTEXT.remove();
+					CallbackValues.CONTEXT.remove();
 				}
 				logger.log(Level.INFO, "without context");
 			}
@@ -282,16 +283,23 @@ public final class Smoke {
 			return name.equals("sample") ? Level.DEBUG : super.levelOrNull(name);
 		}
 
-		private final MDCAdapter adapter = new MemoryMDC();
-
 		@Override
 		public MDCAdapter createMDCAdapter() {
-			return adapter;
+			return CONTEXT;
+		}
+
+	}
+
+	private static final BalsaConfig.MDCAdapter CONTEXT = new MemoryMDC();
+
+	public static final class MdcValues extends KeyValuesProvider {
+
+		public MdcValues() {
 		}
 
 		@Override
 		public void keyValues(BiConsumer<String, String> consumer) {
-			var values = adapter.getCopyOfContextMap();
+			var values = CONTEXT.getCopyOfContextMap();
 			if (values != null)
 				values.forEach(consumer);
 		}
@@ -308,6 +316,13 @@ public final class Smoke {
 			throw new AssertionError("System.Logger must not create an MDC adapter");
 		}
 
+	}
+
+	public static final class SystemValues extends KeyValuesProvider {
+
+		public SystemValues() {
+		}
+
 		@Override
 		public void keyValues(BiConsumer<String, String> consumer) {
 			consumer.accept("source", "direct");
@@ -315,11 +330,11 @@ public final class Smoke {
 
 	}
 
-	public static final class CallbackConfig extends BalsaConfig {
+	public static final class CallbackValues extends KeyValuesProvider {
 
 		static final ThreadLocal<Map<String, String>> CONTEXT = new ThreadLocal<>();
 
-		public CallbackConfig() {
+		public CallbackValues() {
 		}
 
 		@Override
@@ -343,9 +358,9 @@ public final class Smoke {
 
 	}
 
-	public static final class BadContextConfig extends BalsaConfig {
+	public static final class BadContextValues extends KeyValuesProvider {
 
-		public BadContextConfig() {
+		public BadContextValues() {
 		}
 
 		@Override
