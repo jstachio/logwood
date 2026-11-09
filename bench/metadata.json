@@ -1,0 +1,28 @@
+{
+  "architecture": "aarch64",
+  "logicalCpus": 20,
+  "artifacts": {
+    "balsa": {
+      "bytes": 15701,
+      "sha256": "e56dd7369e9f36dd5227f16fe03b5b3fdfd5b54864ce41b6d4b3234e0b28e2a5",
+      "implementationClasses": 6,
+      "uncompressedClassBytes": 24558
+    },
+    "slf4j-simple": {
+      "bytes": 15705,
+      "sha256": "8e701404786a4f87219d39d4853c86dfe4e86ae99376a39749df6c08e75022e0",
+      "implementationClasses": 6,
+      "uncompressedClassBytes": 21690
+    },
+    "slf4j-system-bridge": {
+      "bytes": 9649,
+      "sha256": "2e7e49d4a17561eb19b59ef4d5194b9a2f35dc52a040aa9afbe461c126628cab",
+      "implementationClasses": 4,
+      "uncompressedClassBytes": 9184
+    }
+  },
+  "compileJdk": "Amazon Corretto 17.0.21.0.11",
+  "benchmarkJdk": "OpenJDK 27+35-2325",
+  "recordFormat": "UTF-8 LTSV, no timestamp; thread/level/logger/message",
+  "benchmarkSourceSha256": "5b876a0e7c19b7d1b2eae9efbfa2ee3fa2654bcfd06bb5256cb3266d2107ae66"
+}

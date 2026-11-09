@@ -1,0 +1,5 @@
+Balsa implementation sources are licensed under the Zero-Clause BSD license.
+
+The generated mvnw and mvnw.cmd build scripts contain Apache Maven Wrapper code,
+licensed under Apache License 2.0. See .mvn/wrapper/LICENSE and the script headers.
+Apache Maven Wrapper: https://maven.apache.org/wrapper/
