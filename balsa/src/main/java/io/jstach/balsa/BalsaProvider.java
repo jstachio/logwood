@@ -98,30 +98,23 @@ public class BalsaProvider implements SLF4JServiceProvider, ILoggerFactory, MDCA
 			adapter.setContextMap(contextMap);
 	}
 
+	// Required SLF4J compatibility methods are no-ops.
 	@Override
 	public void pushByKey(String key, String value) {
-		var adapter = mdc;
-		if (adapter != null)
-			adapter.pushByKey(key, value);
 	}
 
 	@Override
 	public String popByKey(String key) {
-		var adapter = mdc;
-		return adapter == null ? null : adapter.popByKey(key);
+		return null;
 	}
 
 	@Override
 	public Deque<String> getCopyOfDequeByKey(String key) {
-		var adapter = mdc;
-		return adapter == null ? null : adapter.getCopyOfDequeByKey(key);
+		return null;
 	}
 
 	@Override
 	public void clearDequeByKey(String key) {
-		var adapter = mdc;
-		if (adapter != null)
-			adapter.clearDequeByKey(key);
 	}
 
 }

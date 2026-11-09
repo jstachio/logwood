@@ -2,7 +2,6 @@ package io.jstach.balsa;
 
 import java.lang.System.Logger.Level;
 import java.util.Locale;
-import java.util.Deque;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
@@ -54,9 +53,9 @@ public class BalsaConfig {
 
 	/**
 	 * Optional MDC storage, independent of SLF4J. The SLF4J provider bridges this
-	 * contract only when that API is used. Defaults do nothing and store no data. Map and
-	 * deque accessors must return copies; setContextMap(null) clears context.
-	 * Implementations own their storage, concurrency and inheritance policies.
+	 * contract only when that API is used. Defaults do nothing and store no data. The map
+	 * accessor must return a copy; setContextMap(null) clears context. Implementations
+	 * own their storage, concurrency and inheritance policies.
 	 */
 	public interface MDCAdapter {
 
@@ -78,20 +77,6 @@ public class BalsaConfig {
 		}
 
 		default void setContextMap(Map<String, String> contextMap) {
-		}
-
-		default void pushByKey(String key, String value) {
-		}
-
-		default String popByKey(String key) {
-			return null;
-		}
-
-		default Deque<String> getCopyOfDequeByKey(String key) {
-			return null;
-		}
-
-		default void clearDequeByKey(String key) {
 		}
 
 	}

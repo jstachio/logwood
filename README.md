@@ -112,8 +112,9 @@ Balsa's System.Logger path does not initialize `LoggerFactory`, `MDC`,
 `MarkerFactory`, or `BalsaProvider`. It never calls `createMDCAdapter()`.
 SLF4J initialization requests that adapter separately. The default null result
 selects the no-op bridge. `BalsaConfig.MDCAdapter` is Balsa's own JDK-only contract,
-not an SLF4J type. A custom adapter supplies storage for the map and deque operations;
-the SLF4J provider delegates to it. Copy accessors must return copies and
+not an SLF4J type. A custom adapter supplies storage for map operations;
+the SLF4J provider delegates those operations to it. SLF4J deque operations are no-ops.
+The map accessor must return a copy and
 `setContextMap(null)` must clear context. To include MDC in either API's output,
 read a provider-owned adapter in `keyValues` rather than invoking the static MDC
 facade. Context itself does not depend on MDC. For example, a config can push

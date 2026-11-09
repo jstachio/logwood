@@ -163,19 +163,16 @@ public final class Smoke {
 				MDC.setContextMap(null);
 				if (MDC.get("key") != null)
 					throw new AssertionError("set null");
+				MDC.put("stack", "map value");
 				MDC.pushByKey("stack", "outer");
 				MDC.pushByKey("stack", "inner");
 				var adapter = MDC.getMDCAdapter();
-				var deque = adapter.getCopyOfDequeByKey("stack");
-				deque.clear();
-				if (!"inner".equals(MDC.popByKey("stack")))
-					throw new AssertionError("deque copy/pop");
-				if (!"outer".equals(MDC.popByKey("stack")))
-					throw new AssertionError("deque order");
-				MDC.pushByKey("stack", "clear");
+				if (adapter.getCopyOfDequeByKey("stack") != null || MDC.popByKey("stack") != null)
+					throw new AssertionError("stored deque with custom map adapter");
 				adapter.clearDequeByKey("stack");
-				if (MDC.popByKey("stack") != null)
-					throw new AssertionError("clear deque");
+				if (!"map value".equals(MDC.get("stack")))
+					throw new AssertionError("deque operation changed map context");
+				MDC.remove("stack");
 				System.getLogger("system").log(Level.INFO, "MDC bridge passed");
 			}
 			case "spi" -> {
@@ -228,8 +225,6 @@ public final class Smoke {
 
 		private final ThreadLocal<Map<String, String>> context = new ThreadLocal<>();
 
-		private final ThreadLocal<Map<String, java.util.Deque<String>>> stacks = new ThreadLocal<>();
-
 		@Override
 		public void put(String key, String value) {
 			var map = context.get();
@@ -270,37 +265,6 @@ public final class Smoke {
 				context.remove();
 			else
 				context.set(new java.util.HashMap<>(values));
-		}
-
-		@Override
-		public void pushByKey(String key, String value) {
-			var map = stacks.get();
-			if (map == null) {
-				map = new java.util.HashMap<>();
-				stacks.set(map);
-			}
-			map.computeIfAbsent(key, ignored -> new java.util.ArrayDeque<>()).push(value);
-		}
-
-		@Override
-		public String popByKey(String key) {
-			var map = stacks.get();
-			var deque = map == null ? null : map.get(key);
-			return deque == null ? null : deque.pollFirst();
-		}
-
-		@Override
-		public java.util.Deque<String> getCopyOfDequeByKey(String key) {
-			var map = stacks.get();
-			var deque = map == null ? null : map.get(key);
-			return deque == null ? null : new java.util.ArrayDeque<>(deque);
-		}
-
-		@Override
-		public void clearDequeByKey(String key) {
-			var map = stacks.get();
-			if (map != null)
-				map.remove(key);
 		}
 
 	}
