@@ -1,22 +1,23 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>io.jstach.balsa</groupId>
+  <parent>
+    <groupId>io.jstach.balsa</groupId>
+    <artifactId>balsa-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
   <artifactId>balsa-bench</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <name>Balsa Benchmarks</name>
   <properties>
-    <maven.compiler.release>21</maven.compiler.release>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.javadoc.skip>true</maven.javadoc.skip>
   </properties>
   <dependencies>
     <dependency>
       <groupId>io.jstach.balsa</groupId>
       <artifactId>balsa</artifactId>
-      <version>0.1.0-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-simple</artifactId>
-      <version>2.0.20</version>
     </dependency>
     <dependency>
       <groupId>org.openjdk.jmh</groupId>
@@ -35,7 +36,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.16.0</version>
         <configuration>
           <annotationProcessorPaths>
             <path>
@@ -74,20 +74,6 @@
                 </filter>
               </filters>
             </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <groupId>io.spring.javaformat</groupId>
-        <artifactId>spring-javaformat-maven-plugin</artifactId>
-        <version>0.0.48</version>
-        <executions>
-          <execution>
-            <id>format</id>
-            <phase>validate</phase>
-            <goals>
-              <goal>validate</goal>
-            </goals>
           </execution>
         </executions>
       </plugin>

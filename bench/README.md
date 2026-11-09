@@ -1,6 +1,6 @@
 # Benchmark
 
-This Maven project is separate from the runtime artifact. It uses JMH 1.37 and
+This Maven module is separate from the runtime artifact and is built by the root reactor. It uses JMH 1.37 and
 slf4j-simple 2.0.20. Both providers are instantiated directly to avoid measuring
 facade provider selection. Each receives the same PrintStream backed by
 OutputStream.nullOutputStream(), so results measure formatting, escaping,
@@ -11,8 +11,7 @@ standard output is unescaped. The escaping case deliberately measures that
 security difference, not equivalent output bytes.
 
 ```sh
-./mvnw install
-./mvnw -f bench/pom.xml package
+./mvnw -pl bench -am clean package
 mkdir -p /tmp/balsa-jmh
 java -Djava.io.tmpdir=/tmp/balsa-jmh -jar bench/target/benchmarks.jar \
   -jvmArgs '-Xms128m -Xmx128m -Djava.io.tmpdir=/tmp/balsa-jmh' \

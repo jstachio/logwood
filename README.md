@@ -9,6 +9,11 @@ shutdown hooks, caller lookup, or packaging-data lookup.
 
 ## Build and use
 
+This is a Maven reactor: `balsa/` builds the runtime artifact and `bench/` builds
+its isolated JMH harness. The root `balsa-parent` POM shares dependency versions,
+Java 21 compiler settings, Spring formatting validation, and build plugins.
+The runtime coordinates remain `io.jstach.balsa:balsa`.
+
 ```sh
 ./mvnw spring-javaformat:apply
 ./mvnw clean verify
@@ -22,6 +27,8 @@ shutdown hooks, caller lookup, or packaging-data lookup.
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
+
+For just the runtime, use `./mvnw -pl balsa -am clean verify`.
 
 The build validates the same Spring Java Format 0.0.48 style used by Rainbow Gum.
 Run `spring-javaformat:apply` after editing Java sources; CI rejects formatting drift.
