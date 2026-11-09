@@ -9,8 +9,8 @@ redact secrets intentionally passed to the logger.
 Only Balsa emits raw field delimiters and record terminators. Data cannot add a
 new field, newline, journald priority, or terminal escape sequence. C0 controls,
 DEL/C1, Unicode line separators, all Unicode FORMAT characters, backslashes, and
-unpaired surrogates are escaped. The Unicode 17 FORMAT set is covered on Java 17
-as well, including nine controls absent from that JDK's character database.
+unpaired surrogates are escaped. The Unicode 17 FORMAT set is covered on the Java 21 baseline,
+including controls absent from older character databases.
 The set was checked against the [Unicode data](https://www.unicode.org/Public/17.0.0/ucd/UnicodeData.txt).
 Valid ordinary Unicode is preserved without normalization or transliteration;
 visual confusables remain application data.
@@ -18,8 +18,8 @@ visual confusables remain application data.
 A value containing an actual newline differs from a literal backslash followed
 by `n`. Escapes and surrogate pairs are emitted atomically, including at limits.
 Labels encode forbidden characters, percent signs, and malformed surrogates
-without collisions. MDC and fluent fields are namespaced away from metadata.
-Only marker names are read; marker graphs are not traversed.
+without collisions. Context and fluent fields are namespaced away from metadata.
+Marker arguments and event marker accessors are ignored.
 
 Each finished record is encoded as UTF-8 and submitted in one
 `System.out.writeBytes(byte[])` call. The standard PrintStream serializes that
@@ -38,8 +38,7 @@ code units, not UTF-8 bytes.
 | Complete record, including truncation marker and LF | 16,384 units |
 | Encoded value | 4,096 units |
 | Encoded custom key (namespace separate) | 256 units, otherwise the field is skipped |
-| MDC / fluent fields | 32 from each source |
-| Fluent marker names | 4 |
+| Context callback / fluent fields | 32 from each source |
 | Array nesting / elements per array | 8 / 32 |
 | Throwable graph / total stack frames | 8 throwables / 64 frames |
 | Suppressed exceptions per throwable | 4 |
@@ -47,31 +46,33 @@ code units, not UTF-8 bytes.
 | System.Logger MessageFormat pattern | 1,024 units |
 | MessageFormat argument index / format elements / brace depth | 31 / 64 / 8 |
 | Logger name / hierarchy depth | 1,024 units / 64 |
-| Cached marker names | 256 names, each at most 1,024 units |
 
 Clipping emits `truncated:true`. Saturation does not switch to an unescaped
 fallback. Unsafe formatting patterns produce an escaped rejection marker.
 System.Logger arguments are bounded before MessageFormat expansion. Large
 numeric values are not expanded without bounds. No input-sized formatter or
-class-name cache is retained. Cached markers are weak references.
+class-name cache is retained. Balsa retains no marker state. A context callback
+must emit distinct keys and must not retain or asynchronously use its consumer;
+late calls after the callback returns are ignored.
 
 ## Failures and reentry
 
-Invalid root configuration, invalid journald settings, a bad MDC adapter, or
+Invalid root configuration, invalid journald settings, or
 multiple configuration providers disable logging instead of falling back to
-another backend. Bad per-name configuration disables that logger. One fixed
+another backend. A bad MDC adapter disables logging when SLF4J initializes;
+System.Logger alone never requests that adapter. Bad per-name configuration disables that logger. One fixed
 LTSV diagnostic reports the failure without printing property values, provider
 exception messages, or their stack traces.
 
 Nonfatal callback failures are contained. An event whose metadata cannot safely
 be read may be dropped, with one fixed diagnostic. Nested calls during formatting are
-dropped, preventing recursive toString, MDC, supplier, or stdout callbacks from
+dropped, preventing recursive toString, context, supplier, or stdout callbacks from
 corrupting an outer record or recursing forever. Fatal VM errors and ThreadDeath
 are rethrown; StackOverflowError from a callback is contained.
 
 As with any in-process logger, application callbacks are code, not a sandbox.
 They can block or allocate before returning. This includes toString, suppliers,
-MDC adapters, resource bundles, throwable accessors, and code evaluated by a
+context providers, MDC adapters, resource bundles, throwable accessors, and code evaluated by a
 facade before it reaches the backend. Throwable accessors may clone arrays.
 An opt-in MDC adapter controls its own storage. Stdout I/O can block, and output
 errors follow PrintStream's error-handling semantics. Balsa's own output and
@@ -83,7 +84,9 @@ Tests cover every UTF-16 unit, label uniqueness, control/bidi escaping, malforme
 Unicode, delimiter boundaries, cycles, dense input, oversized format indices,
 reentrant callbacks, configuration failures, serialization, cache bounds,
 concurrent records, localization, and actual provider discovery in fresh JVMs
-on both the classpath and module path.
+on both the classpath and module path. Fresh JVM class-initialization traces
+verify System.Logger leaves the SLF4J facades and provider uninitialized, with
+both default settings and custom context/MDC configurations.
 
 Report a vulnerability privately to the repository owner through the contact
 information on https://github.com/agentgt. Do not post secrets in a public issue.

@@ -24,5 +24,6 @@
   "compileJdk": "Amazon Corretto 17.0.21.0.11",
   "benchmarkJdk": "OpenJDK 27+35-2325",
   "recordFormat": "UTF-8 LTSV, no timestamp; thread/level/logger/message",
-  "benchmarkSourceSha256": "5b876a0e7c19b7d1b2eae9efbfa2ee3fa2654bcfd06bb5256cb3266d2107ae66"
+  "benchmarkSourceSha256": "5b876a0e7c19b7d1b2eae9efbfa2ee3fa2654bcfd06bb5256cb3266d2107ae66",
+  "sourceCommit": "994a00661fbdf860b8663a8f4143674bc93d6234"
 }

@@ -30,7 +30,7 @@ rainbow gum and slf4j-simple
 ```java
 
 // or interface
-public abstract class BalsamConfig {
+public abstract class BalsaConfig {
 
 // maybe an int instead.
 public System.Logger.Level levelOrNull(String loggerName) {

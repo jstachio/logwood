@@ -1,5 +1,9 @@
 # Measurements
 
+Historical baseline from commit `994a00661fbdf860b8663a8f4143674bc93d6234`.
+This predates the Java 21 baseline, context callback, and marker removal.
+These numbers do not measure the current implementation.
+
 Measured on a shared Linux aarch64 host with 20 logical CPUs. Runtime: OpenJDK
 27+35-2325; library and benchmark compiled with Amazon Corretto 17.0.21.0.11.
 JMH 1.37, one worker, 128 MiB heap, two forks, three one-second warmups, and
