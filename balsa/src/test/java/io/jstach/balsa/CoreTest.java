@@ -28,7 +28,7 @@ class CoreTest {
 
 	@Test
 	void serializationRebindsAndResolvesThresholdInsteadOfEnablingEverything() throws Exception {
-		var logger = Balsa.instance().getLogger("serialized");
+		var logger = new BalsaLog("serialized", Balsa.instance());
 		assertTrue(logger.isInfoEnabled());
 		var bytes = new ByteArrayOutputStream();
 		try (var output = new ObjectOutputStream(bytes)) {
@@ -56,12 +56,13 @@ class CoreTest {
 		var logger = Balsa.instance().getLogger("guarded");
 		Balsa.ACTIVE.set(Boolean.TRUE);
 		try {
-			assertFalse(logger.isInfoEnabled());
+			assertThrows(NullPointerException.class, () -> logger.isLoggable(null));
+			assertFalse(logger.isLoggable(System.Logger.Level.INFO));
 		}
 		finally {
 			Balsa.ACTIVE.set(Boolean.FALSE);
 		}
-		assertTrue(logger.isInfoEnabled());
+		assertTrue(logger.isLoggable(System.Logger.Level.INFO));
 	}
 
 	@Test
@@ -71,9 +72,9 @@ class CoreTest {
 		var bytes = new ByteArrayOutputStream();
 		try (var capture = new PrintStream(bytes, false, StandardCharsets.UTF_8)) {
 			System.setOut(capture);
-			assertFalse(core.getLogger("secret".repeat(1000)).isInfoEnabled());
-			assertFalse(core.getLogger("a.".repeat(100)).isErrorEnabled());
-			assertTrue(core.getLogger("normal").isInfoEnabled());
+			assertFalse(core.getLogger("secret".repeat(1000)).isLoggable(System.Logger.Level.INFO));
+			assertFalse(core.getLogger("a.".repeat(100)).isLoggable(System.Logger.Level.ERROR));
+			assertTrue(core.getLogger("normal").isLoggable(System.Logger.Level.INFO));
 		}
 		finally {
 			System.setOut(before);
@@ -97,7 +98,7 @@ class CoreTest {
 		var bytes = new ByteArrayOutputStream();
 		try (var capture = new PrintStream(bytes, false, StandardCharsets.UTF_16BE)) {
 			System.setOut(capture);
-			core.getLogger("utf8").info("é😀");
+			core.getLogger("utf8").log(System.Logger.Level.INFO, "é😀");
 		}
 		finally {
 			System.setOut(before);
@@ -115,12 +116,12 @@ class CoreTest {
 		try (var capture = new PrintStream(bytes, false, StandardCharsets.UTF_8) {
 			@Override
 			public void write(byte[] value, int offset, int length) {
-				logger.error("nested");
+				logger.log(System.Logger.Level.ERROR, "nested");
 				super.write(value, offset, length);
 			}
 		}) {
 			System.setOut(capture);
-			logger.info("outer");
+			logger.log(System.Logger.Level.INFO, "outer");
 		}
 		finally {
 			System.setOut(before);

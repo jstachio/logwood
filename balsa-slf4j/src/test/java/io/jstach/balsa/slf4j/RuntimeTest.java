@@ -1,4 +1,6 @@
-package io.jstach.balsa;
+package io.jstach.balsa.slf4j;
+
+import io.jstach.balsa.BalsaConfig;
 
 import static org.junit.jupiter.api.Assertions.*;
 import java.io.File;
@@ -37,7 +39,8 @@ class RuntimeTest {
 		}
 		String api = Path.of(org.slf4j.Logger.class.getProtectionDomain().getCodeSource().getLocation().toURI())
 			.toString();
-		String main = Path.of("target/classes").toAbsolutePath().toString();
+		String main = Path.of(BalsaConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toString();
+		String registration = Path.of("target/classes").toAbsolutePath().toString();
 		String tests = Path.of("target/test-classes").toAbsolutePath().toString();
 		var command = new ArrayList<String>();
 		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
@@ -47,7 +50,8 @@ class RuntimeTest {
 		if (traceInitialization)
 			command.add("-Xlog:class+init=info:file=" + initialization);
 		if (modular) {
-			String modules = "io.jstach.balsa", path = main + File.pathSeparator + api;
+			String modules = "io.jstach.balsa.slf4j",
+					path = main + File.pathSeparator + registration + File.pathSeparator + api;
 			if (configModule != null) {
 				modules += ",test.config";
 				path += File.pathSeparator + configModule;
@@ -56,8 +60,8 @@ class RuntimeTest {
 			command.addAll(List.of("-cp", tests + File.pathSeparator + folder));
 		}
 		else
-			command.addAll(List.of("-cp",
-					tests + File.pathSeparator + main + File.pathSeparator + api + File.pathSeparator + folder));
+			command.addAll(List.of("-cp", tests + File.pathSeparator + main + File.pathSeparator + registration
+					+ File.pathSeparator + api + File.pathSeparator + folder));
 		command.addAll(List.of("balsa.smoke.Smoke", scenario));
 		Path stdout = folder.resolve("out"), stderr = folder.resolve("err");
 		var child = new ProcessBuilder(command).redirectOutput(stdout.toFile()).redirectError(stderr.toFile()).start();
@@ -83,7 +87,7 @@ class RuntimeTest {
 		assertFalse(data.contains("\r"));
 		List<Map<String, String>> records = new ArrayList<>();
 		for (String line : data.lines().toList()) {
-			assertTrue(line.length() < Ltsv.RECORD);
+			assertTrue(line.length() < 16_384);
 			Map<String, String> fields = new HashMap<>();
 			if (line.startsWith("<")) {
 				fields.put("priority", line.substring(1, 2));
@@ -94,11 +98,35 @@ class RuntimeTest {
 				assertTrue(colon > 0, field);
 				String key = field.substring(0, colon);
 				assertTrue(key.matches("[A-Za-z0-9_.%\\-]+"), key);
-				assertNull(fields.put(key, LtsvTest.decode(field.substring(colon + 1))), "duplicate field " + key);
+				assertNull(fields.put(key, decode(field.substring(colon + 1))), "duplicate field " + key);
 			}
 			records.add(fields);
 		}
 		return records;
+	}
+
+	private static String decode(String input) {
+		var out = new StringBuilder();
+		for (int i = 0; i < input.length(); i++) {
+			char c = input.charAt(i);
+			if (c != '\\') {
+				out.append(c);
+				continue;
+			}
+			c = input.charAt(++i);
+			switch (c) {
+				case '\\' -> out.append('\\');
+				case 'n' -> out.append('\n');
+				case 'r' -> out.append('\r');
+				case 't' -> out.append('\t');
+				case 'u' -> {
+					out.append((char) Integer.parseInt(input.substring(i + 1, i + 5), 16));
+					i += 4;
+				}
+				default -> fail("Unknown escape: " + c);
+			}
+		}
+		return out.toString();
 	}
 
 	@ParameterizedTest
@@ -127,6 +155,17 @@ class RuntimeTest {
 		assertEquals("v\n", records.get(0).get("context.a%3a%09"));
 		assertEquals("also spoof", records.get(0).get("kv.level"));
 		assertFalse(run("mdc", modular, null).get(0).containsKey("context.level"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void slf4jMdcDelegatesToTheJdkOnlyStorageContract(boolean modular) throws Exception {
+		var records = run("mdc-contract", modular, "balsa.smoke.Smoke$MdcConfig");
+		assertEquals(1, records.size());
+		assertEquals("MDC bridge passed", records.getFirst().get("message"));
+		records = run("mdc-noop", modular, null);
+		assertEquals(1, records.size());
+		assertEquals("MDC no-op passed", records.getFirst().get("message"));
 	}
 
 	@Test
@@ -291,8 +330,10 @@ class RuntimeTest {
 		String api = Path.of(org.slf4j.Logger.class.getProtectionDomain().getCodeSource().getLocation().toURI())
 			.toString();
 		var command = List.of(Path.of(System.getProperty("java.home"), "bin", "javac").toString(), "--release", "21",
-				"--module-path", Path.of("target/classes").toAbsolutePath() + File.pathSeparator + api, "-d",
-				configModule.toString(), moduleInfo.toString(), config.toString());
+				"--module-path",
+				Path.of(BalsaConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI())
+						+ File.pathSeparator + api,
+				"-d", configModule.toString(), moduleInfo.toString(), config.toString());
 		Path diagnostics = temp.resolve("javac.txt");
 		var compiler = new ProcessBuilder(command).redirectErrorStream(true)
 			.redirectOutput(diagnostics.toFile())
@@ -305,6 +346,56 @@ class RuntimeTest {
 			compiler.destroyForcibly();
 		}
 		assertEquals(List.of(), run("basic", true, null));
+	}
+
+	@Test
+	void namedSlf4jApplicationDiscoversTheRegistrationModuleThroughServiceBinding() throws Exception {
+		Path source = temp.resolve("source"), app = source.resolve("sample/Main.java");
+		Files.createDirectories(app.getParent());
+		Files.writeString(source.resolve("module-info.java"), "module sample.app { requires org.slf4j; }");
+		Files.writeString(app, """
+				package sample;
+				public final class Main {
+				  public static void main(String[] args) {
+				    org.slf4j.LoggerFactory.getLogger("app").info("SLF4J module discovery");
+				    System.getLogger("app").log(System.Logger.Level.INFO, "System.Logger module discovery");
+				  }
+				}
+				""");
+		String modules = String.join(File.pathSeparator,
+				Path.of(BalsaConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toString(),
+				Path.of("target/classes").toAbsolutePath().toString(),
+				Path.of(org.slf4j.Logger.class.getProtectionDomain().getCodeSource().getLocation().toURI()).toString());
+		Path classes = temp.resolve("app-classes"), diagnostics = temp.resolve("diagnostics");
+		var compiler = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "javac").toString(),
+				"--release", "21", "--module-path", modules, "-d", classes.toString(),
+				source.resolve("module-info.java").toString(), app.toString())
+			.redirectErrorStream(true)
+			.redirectOutput(diagnostics.toFile())
+			.start();
+		try {
+			assertTrue(compiler.waitFor(30, TimeUnit.SECONDS));
+			assertEquals(0, compiler.exitValue(), Files.readString(diagnostics));
+		}
+		finally {
+			compiler.destroyForcibly();
+		}
+		var child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+				"--module-path", modules + File.pathSeparator + classes, "-m", "sample.app/sample.Main")
+			.redirectErrorStream(true)
+			.redirectOutput(diagnostics.toFile())
+			.start();
+		try {
+			assertTrue(child.waitFor(30, TimeUnit.SECONDS));
+			assertEquals(0, child.exitValue(), Files.readString(diagnostics));
+			assertEquals("""
+					level:INFO\tthread:main\tlogger:app\tmessage:SLF4J module discovery
+					level:INFO\tthread:main\tlogger:app\tmessage:System.Logger module discovery
+					""", Files.readString(diagnostics));
+		}
+		finally {
+			child.destroyForcibly();
+		}
 	}
 
 }

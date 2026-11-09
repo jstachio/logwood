@@ -6,8 +6,6 @@ import java.util.Map;
 import java.util.function.BiConsumer;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.slf4j.helpers.BasicMDCAdapter;
-import org.slf4j.spi.MDCAdapter;
 import io.jstach.balsa.BalsaConfig;
 
 public final class Smoke {
@@ -127,6 +125,59 @@ public final class Smoke {
 				LoggerFactory.getLogger("sample").atInfo().addKeyValue("level", "also spoof").log("context");
 				MDC.clear();
 			}
+			case "mdc-noop" -> {
+				MDC.put("key", "ignored");
+				MDC.setContextMap(Map.of("key", "ignored"));
+				if (MDC.get("key") != null || MDC.getCopyOfContextMap() != null)
+					throw new AssertionError("stored context");
+				MDC.remove("key");
+				MDC.clear();
+				MDC.setContextMap(null);
+				MDC.pushByKey("stack", "ignored");
+				var adapter = MDC.getMDCAdapter();
+				if (MDC.popByKey("stack") != null || adapter.getCopyOfDequeByKey("stack") != null)
+					throw new AssertionError("stored deque");
+				adapter.clearDequeByKey("stack");
+				LoggerFactory.getLogger("sample").info("MDC no-op passed");
+			}
+			case "mdc-contract" -> {
+				MDC.put("key", "value");
+				if (!"value".equals(MDC.get("key")))
+					throw new AssertionError("put/get");
+				var copy = MDC.getCopyOfContextMap();
+				copy.put("key", "changed");
+				if (!"value".equals(MDC.get("key")))
+					throw new AssertionError("copy was live");
+				MDC.setContextMap(copy);
+				copy.put("key", "later");
+				if (!"changed".equals(MDC.get("key")))
+					throw new AssertionError("set did not copy");
+				MDC.remove("key");
+				if (MDC.get("key") != null)
+					throw new AssertionError("remove");
+				MDC.put("key", "clear");
+				MDC.clear();
+				if (MDC.get("key") != null)
+					throw new AssertionError("clear");
+				MDC.put("key", "clear with null");
+				MDC.setContextMap(null);
+				if (MDC.get("key") != null)
+					throw new AssertionError("set null");
+				MDC.pushByKey("stack", "outer");
+				MDC.pushByKey("stack", "inner");
+				var adapter = MDC.getMDCAdapter();
+				var deque = adapter.getCopyOfDequeByKey("stack");
+				deque.clear();
+				if (!"inner".equals(MDC.popByKey("stack")))
+					throw new AssertionError("deque copy/pop");
+				if (!"outer".equals(MDC.popByKey("stack")))
+					throw new AssertionError("deque order");
+				MDC.pushByKey("stack", "clear");
+				adapter.clearDequeByKey("stack");
+				if (MDC.popByKey("stack") != null)
+					throw new AssertionError("clear deque");
+				System.getLogger("system").log(Level.INFO, "MDC bridge passed");
+			}
 			case "spi" -> {
 				LoggerFactory.getLogger("sample.child").debug("custom");
 				MdcConfig.EARLY.log(Level.INFO, "early after initialization");
@@ -173,6 +224,87 @@ public final class Smoke {
 		}
 	}
 
+	private static final class MemoryMDC implements BalsaConfig.MDCAdapter {
+
+		private final ThreadLocal<Map<String, String>> context = new ThreadLocal<>();
+
+		private final ThreadLocal<Map<String, java.util.Deque<String>>> stacks = new ThreadLocal<>();
+
+		@Override
+		public void put(String key, String value) {
+			var map = context.get();
+			if (map == null) {
+				map = new java.util.HashMap<>();
+				context.set(map);
+			}
+			map.put(key, value);
+		}
+
+		@Override
+		public String get(String key) {
+			var map = context.get();
+			return map == null ? null : map.get(key);
+		}
+
+		@Override
+		public void remove(String key) {
+			var map = context.get();
+			if (map != null)
+				map.remove(key);
+		}
+
+		@Override
+		public void clear() {
+			context.remove();
+		}
+
+		@Override
+		public Map<String, String> getCopyOfContextMap() {
+			var map = context.get();
+			return map == null ? null : new java.util.HashMap<>(map);
+		}
+
+		@Override
+		public void setContextMap(Map<String, String> values) {
+			if (values == null)
+				context.remove();
+			else
+				context.set(new java.util.HashMap<>(values));
+		}
+
+		@Override
+		public void pushByKey(String key, String value) {
+			var map = stacks.get();
+			if (map == null) {
+				map = new java.util.HashMap<>();
+				stacks.set(map);
+			}
+			map.computeIfAbsent(key, ignored -> new java.util.ArrayDeque<>()).push(value);
+		}
+
+		@Override
+		public String popByKey(String key) {
+			var map = stacks.get();
+			var deque = map == null ? null : map.get(key);
+			return deque == null ? null : deque.pollFirst();
+		}
+
+		@Override
+		public java.util.Deque<String> getCopyOfDequeByKey(String key) {
+			var map = stacks.get();
+			var deque = map == null ? null : map.get(key);
+			return deque == null ? null : new java.util.ArrayDeque<>(deque);
+		}
+
+		@Override
+		public void clearDequeByKey(String key) {
+			var map = stacks.get();
+			if (map != null)
+				map.remove(key);
+		}
+
+	}
+
 	public static final class MdcConfig extends BalsaConfig {
 
 		static final System.Logger EARLY = System.getLogger("early");
@@ -186,7 +318,7 @@ public final class Smoke {
 			return name.equals("sample") ? Level.DEBUG : super.levelOrNull(name);
 		}
 
-		private final MDCAdapter adapter = new BasicMDCAdapter();
+		private final MDCAdapter adapter = new MemoryMDC();
 
 		@Override
 		public MDCAdapter createMDCAdapter() {
@@ -242,7 +374,7 @@ public final class Smoke {
 
 		@Override
 		public MDCAdapter createMDCAdapter() {
-			return null;
+			throw new IllegalStateException("secret=do-not-print");
 		}
 
 	}

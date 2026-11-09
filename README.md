@@ -1,7 +1,8 @@
 # Balsa
 
 A small stdout backend for SLF4J 2 and `System.Logger`, inspired by Rainbow Gum
-and slf4j-simple. Java 21+, Zero-Clause BSD, one runtime dependency: `slf4j-api`.
+and slf4j-simple. Java 21+, Zero-Clause BSD. System.Logger needs no runtime dependency;
+`slf4j-api` is optional and needed only for SLF4J logging.
 
 One output, one format, one application SPI. No file or network outputs,
 configuration files, format patterns, output plugins, asynchronous queues,
@@ -9,8 +10,9 @@ shutdown hooks, caller lookup, or packaging-data lookup.
 
 ## Build and use
 
-This is a Maven reactor: `balsa/` builds the runtime artifact and `bench/` builds
-its isolated JMH harness. The root `balsa-parent` POM shares dependency versions,
+This is a Maven reactor: `balsa/` builds the runtime artifact, `balsa-slf4j/`
+adds SLF4J module-path registration, and `bench/` builds its isolated JMH harness.
+The root `balsa-parent` POM shares dependency versions,
 Java 21 compiler settings, Spring formatting validation, and build plugins.
 The runtime coordinates remain `io.jstach.balsa:balsa`.
 
@@ -34,9 +36,29 @@ The build validates the same Spring Java Format 0.0.48 style used by Rainbow Gum
 Run `spring-javaformat:apply` after editing Java sources; CI rejects formatting drift.
 
 This snapshot must first be installed locally; it is not a published release.
-Use Balsa as the only SLF4J provider. The SLF4J API is required even when only
-`System.Logger` is used. Both classpath and module-path discovery are supported;
-a modular application can `requires io.jstach.balsa`.
+System.Logger applications need only the dependency above and, on JPMS,
+`requires io.jstach.balsa`. SLF4J can be absent from both compilation and runtime.
+The core descriptor has `requires static org.slf4j`; its Maven dependency is
+optional. Placing SLF4J on the module path does not force it to resolve.
+
+For SLF4J applications, use this dependency instead. It adds the core and SLF4J API
+and enables automatic discovery on both the classpath and module path:
+
+```xml
+<dependency>
+  <groupId>io.jstach.balsa</groupId>
+  <artifactId>balsa-slf4j</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+A modular SLF4J application can `requires org.slf4j`; service binding discovers
+the provider. It may also explicitly `requires io.jstach.balsa.slf4j`.
+The registration module contains one subclass and its module descriptor.
+JPMS validates service types during resolution, so the SLF4J `provides` directive
+belongs here. The core JAR retains its classpath service descriptor; a classpath
+application can also use `balsa` with an explicit `slf4j-api` dependency.
+Use Balsa as the only SLF4J provider.
 
 ```java
 LoggerFactory.getLogger("app").info("Hello {}", "world");
@@ -59,7 +81,7 @@ throwable overload writes the `error` field.
 
 ## Configuration
 
-Defaults: INFO, stdout, no journald prefix, and `NOPMDCAdapter` (no stored MDC).
+Defaults: INFO, stdout, no journald prefix, and no stored MDC (all MDC operations default to no-ops).
 The only built-in properties are:
 
 | Property | Meaning |
@@ -88,25 +110,22 @@ consumer, and must emit distinct keys.
 
 Balsa's System.Logger path does not initialize `LoggerFactory`, `MDC`,
 `MarkerFactory`, or `BalsaProvider`. It never calls `createMDCAdapter()`.
-SLF4J initialization creates that adapter separately. To include MDC in either
-API's output, return and read a provider-owned adapter, rather than calling the
-static `MDC` facade from the callback. For example:
+SLF4J initialization requests that adapter separately. The default null result
+selects the no-op bridge. `BalsaConfig.MDCAdapter` is Balsa's own JDK-only contract,
+not an SLF4J type. A custom adapter supplies storage for the map and deque operations;
+the SLF4J provider delegates to it. Copy accessors must return copies and
+`setContextMap(null)` must clear context. To include MDC in either API's output,
+read a provider-owned adapter in `keyValues` rather than invoking the static MDC
+facade. Context itself does not depend on MDC. For example, a config can push
+application fields directly:
 
 ```java
 import io.jstach.balsa.BalsaConfig;
-import org.slf4j.spi.MDCAdapter;
 import java.util.function.BiConsumer;
 
 public final class MyConfig extends BalsaConfig {
-  private final MDCAdapter adapter = new org.slf4j.helpers.BasicMDCAdapter();
-
-  @Override public MDCAdapter createMDCAdapter() {
-    return adapter;
-  }
-
   @Override public void keyValues(BiConsumer<String, String> consumer) {
-    var values = adapter.getCopyOfContextMap();
-    if (values != null) values.forEach(consumer);
+    consumer.accept("service", "example");
   }
 }
 ```
@@ -147,7 +166,8 @@ records have fixed limits; clipping is explicit as `truncated:true`.
 Balsa retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
 
-Production has six class files plus `module-info.class`. Runtime jars omit
+The core has eight class files plus `module-info.class`; optional JPMS SLF4J
+registration adds one class and its descriptor. Runtime jars omit
 compiler debugging tables, Maven descriptors, and build-environment manifest fields. To build with source/line
 information for debugging:
 

@@ -59,7 +59,7 @@ late calls after the callback returns are ignored.
 
 Invalid root configuration, invalid journald settings, or
 multiple configuration providers disable logging instead of falling back to
-another backend. A bad MDC adapter disables logging when SLF4J initializes;
+another backend. An MDC factory failure disables logging when SLF4J initializes;
 System.Logger alone never requests that adapter. Bad per-name configuration disables that logger. One fixed
 LTSV diagnostic reports the failure without printing property values, provider
 exception messages, or their stack traces.
@@ -74,7 +74,9 @@ As with any in-process logger, application callbacks are code, not a sandbox.
 They can block or allocate before returning. This includes toString, suppliers,
 context providers, MDC adapters, resource bundles, throwable accessors, and code evaluated by a
 facade before it reaches the backend. Throwable accessors may clone arrays.
-An opt-in MDC adapter controls its own storage. Stdout I/O can block, and output
+An opt-in BalsaConfig.MDCAdapter controls its own storage. Its JDK-only contract
+is bridged by the SLF4J provider, which is loaded only when SLF4J is used.
+System.Logger and configuration discovery also work with the SLF4J API absent. Stdout I/O can block, and output
 errors follow PrintStream's error-handling semantics. Balsa's own output and
 traversal are bounded; it cannot bound arbitrary application execution.
 
@@ -84,7 +86,10 @@ Tests cover every UTF-16 unit, label uniqueness, control/bidi escaping, malforme
 Unicode, delimiter boundaries, cycles, dense input, oversized format indices,
 reentrant callbacks, configuration failures, serialization, cache bounds,
 concurrent records, localization, and actual provider discovery in fresh JVMs
-on both the classpath and module path. Fresh JVM class-initialization traces
+on both the classpath and module path. Packaged-JAR tests omit the SLF4J JAR
+entirely, verify its classes are unavailable and never loaded, and compile/run
+a named application with only Balsa. Tests also cover observable-but-unresolved
+SLF4J modules. Fresh JVM class-initialization traces
 verify System.Logger leaves the SLF4J facades and provider uninitialized, with
 both default settings and custom context/MDC configurations.
 

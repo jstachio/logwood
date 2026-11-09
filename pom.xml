@@ -7,6 +7,7 @@
   <name>Balsa Parent</name>
   <modules>
     <module>balsa</module>
+    <module>balsa-slf4j</module>
     <module>bench</module>
   </modules>
   <description>A small, defensive LTSV backend for SLF4J and System.Logger.</description>
@@ -26,6 +27,11 @@
   </properties>
   <dependencyManagement>
     <dependencies>
+      <dependency>
+        <groupId>io.jstach.balsa</groupId>
+        <artifactId>balsa-slf4j</artifactId>
+        <version>${project.version}</version>
+      </dependency>
       <dependency>
         <groupId>io.jstach.balsa</groupId>
         <artifactId>balsa</artifactId>

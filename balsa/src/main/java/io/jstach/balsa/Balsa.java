@@ -7,10 +7,9 @@ import java.util.ResourceBundle;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.slf4j.ILoggerFactory;
-import org.slf4j.event.LoggingEvent;
+import java.util.function.Consumer;
 
-final class Balsa implements ILoggerFactory {
+final class Balsa {
 
 	static final ThreadLocal<Boolean> ACTIVE = new ThreadLocal<>();
 
@@ -67,9 +66,8 @@ final class Balsa implements ILoggerFactory {
 		}
 	}
 
-	@Override
-	public BalsaLog getLogger(String name) {
-		return new BalsaLog(Objects.requireNonNull(name, "name"), this);
+	BalsaSystemLogger getLogger(String name) {
+		return new BalsaSystemLogger(Objects.requireNonNull(name, "name"), this);
 	}
 
 	int threshold(String name) {
@@ -109,7 +107,7 @@ final class Balsa implements ILoggerFactory {
 		return Integer.MAX_VALUE;
 	}
 
-	void write(String name, Level level, String message, Object[] args, Throwable thrown, LoggingEvent event,
+	void write(String name, Level level, String message, Object[] args, Throwable thrown, Consumer<Ltsv> eventValues,
 			ResourceBundle bundle, int mode) {
 		if (state != 2 || ACTIVE.get() == Boolean.TRUE)
 			return;
@@ -147,19 +145,9 @@ final class Balsa implements ILoggerFactory {
 				out.throwable(thrown);
 			}
 			out.keyValues(config);
-			if (event != null) {
-				var pairs = event.getKeyValuePairs();
-				if (pairs != null) {
-					int countPairs = Math.min(pairs.size(), 32);
-					for (int i = 0; i < countPairs && out.room(); i++) {
-						var pair = pairs.get(i);
-						out.extra("kv.", pair.key, pair.value);
-					}
-					if (pairs.size() > countPairs)
-						out.truncated = true;
-				}
+			if (eventValues != null)
+				eventValues.accept(out);
 
-			}
 			print(out);
 		}
 		catch (Throwable failure) {

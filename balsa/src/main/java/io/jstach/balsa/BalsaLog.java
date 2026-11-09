@@ -1,15 +1,12 @@
 package io.jstach.balsa;
 
 import java.io.ObjectStreamException;
-import java.util.ResourceBundle;
-import java.util.Objects;
-import java.util.function.Supplier;
 import org.slf4j.Marker;
 import org.slf4j.event.LoggingEvent;
 import org.slf4j.helpers.LegacyAbstractLogger;
 import org.slf4j.spi.LoggingEventAware;
 
-final class BalsaLog extends LegacyAbstractLogger implements System.Logger, LoggingEventAware {
+final class BalsaLog extends LegacyAbstractLogger implements LoggingEventAware {
 
 	private static final long serialVersionUID = 1L;
 
@@ -58,8 +55,7 @@ final class BalsaLog extends LegacyAbstractLogger implements System.Logger, Logg
 		return enabled(1000);
 	}
 
-	@Override
-	public boolean isLoggable(System.Logger.Level level) {
+	private boolean isLoggable(System.Logger.Level level) {
 		return enabled(level.getSeverity());
 	}
 
@@ -70,7 +66,7 @@ final class BalsaLog extends LegacyAbstractLogger implements System.Logger, Logg
 
 	@Override
 	protected Object readResolve() throws ObjectStreamException {
-		return Balsa.instance().getLogger(name);
+		return new BalsaLog(name, Balsa.instance());
 	}
 
 	@Override
@@ -104,51 +100,18 @@ final class BalsaLog extends LegacyAbstractLogger implements System.Logger, Logg
 		finally {
 			Balsa.ACTIVE.set(Boolean.FALSE);
 		}
-		balsa.write(name, level, message, args, thrown, event, null, 0);
-	}
-
-	@Override
-	public void log(System.Logger.Level level, ResourceBundle bundle, String message, Throwable thrown) {
-		if (isLoggable(level))
-			balsa.write(name, level, message, null, thrown, null, bundle, 1);
-	}
-
-	@Override
-	public void log(System.Logger.Level level, ResourceBundle bundle, String pattern, Object... args) {
-		if (isLoggable(level))
-			balsa.write(name, level, pattern, args, null, null, bundle, 1);
-	}
-
-	@Override
-	public void log(System.Logger.Level level, Object object) {
-		Objects.requireNonNull(object, "object");
-		if (isLoggable(level))
-			balsa.write(name, level, null, new Object[] { object }, null, null, null, 2);
-	}
-
-	@Override
-	public void log(System.Logger.Level level, Supplier<String> supplier) {
-		log(level, supplier, null);
-	}
-
-	@Override
-	public void log(System.Logger.Level level, Supplier<String> supplier, Throwable thrown) {
-		Objects.requireNonNull(supplier, "supplier");
-		if (!isLoggable(level) || Balsa.ACTIVE.get() == Boolean.TRUE)
-			return;
-		String message;
-		Balsa.ACTIVE.set(Boolean.TRUE);
-		try {
-			message = supplier.get();
-		}
-		catch (Throwable failure) {
-			Balsa.nonFatal(failure);
-			message = "[supplier failed]";
-		}
-		finally {
-			Balsa.ACTIVE.set(Boolean.FALSE);
-		}
-		balsa.write(name, level, message, null, thrown, null, null, 1);
+		balsa.write(name, level, message, args, thrown, out -> {
+			var pairs = event.getKeyValuePairs();
+			if (pairs == null)
+				return;
+			int count = Math.min(pairs.size(), 32);
+			for (int i = 0; i < count && out.room(); i++) {
+				var pair = pairs.get(i);
+				out.extra("kv.", pair.key, pair.value);
+			}
+			if (pairs.size() > count)
+				out.truncated = true;
+		}, null, 0);
 	}
 
 	private static System.Logger.Level system(org.slf4j.event.Level level) {
