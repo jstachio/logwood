@@ -79,9 +79,12 @@ class CoreTest {
 		finally {
 			System.setOut(before);
 		}
-		assertEquals("""
-				level:ERROR\tlogger:io.jstach.balsa\tmessage:Balsa disabled a logger: invalid level configuration
-				""", bytes.toString(StandardCharsets.UTF_8));
+		assertEquals(
+				"""
+						level:ERROR\tthreadId:%d\tlogger:io.jstach.balsa\tmessage:Balsa disabled a logger: invalid level configuration
+						"""
+					.formatted(Thread.currentThread().threadId()),
+				bytes.toString(StandardCharsets.UTF_8));
 	}
 
 	@Test
@@ -103,7 +106,9 @@ class CoreTest {
 		finally {
 			System.setOut(before);
 		}
-		assertEquals("level:INFO\tthread:" + Thread.currentThread().getName() + "\tlogger:utf8\tmessage:é😀\n",
+		assertEquals("""
+				level:INFO\tthread:%s\tthreadId:%d\tlogger:utf8\tmessage:é😀
+				""".formatted(Thread.currentThread().getName(), Thread.currentThread().threadId()),
 				bytes.toString(StandardCharsets.UTF_8));
 	}
 
@@ -126,7 +131,9 @@ class CoreTest {
 		finally {
 			System.setOut(before);
 		}
-		assertEquals("level:INFO\tthread:" + Thread.currentThread().getName() + "\tlogger:stdout\tmessage:outer\n",
+		assertEquals("""
+				level:INFO\tthread:%s\tthreadId:%d\tlogger:stdout\tmessage:outer
+				""".formatted(Thread.currentThread().getName(), Thread.currentThread().threadId()),
 				bytes.toString(StandardCharsets.UTF_8));
 	}
 

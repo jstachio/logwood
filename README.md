@@ -78,11 +78,16 @@ System.getLogger("app").log(System.Logger.Level.INFO, "Hello {0}", "world");
 Output is UTF-8 LTSV, with a single LF after each record:
 
 ```text
-level:INFO	thread:main	logger:app	message:Hello world
+level:INFO	thread:main	threadId:1	logger:app	message:Hello world
 ```
 
 The separators above are actual tabs. There is no clock read or timestamp formatting;
 journald or the stdout capture system can timestamp records.
+
+`threadId` is the current Java thread's numeric ID, including for virtual threads;
+it identifies the virtual thread itself. `thread` contains its name, which can be
+empty or shared by multiple threads. Failure diagnostics also include `threadId`.
+
 SLF4J uses `{}` substitution, including its backslash rules, arrays, trailing
 throwables, and fluent key/value pairs. Marker arguments are ignored. `System.Logger` uses localized
 MessageFormat substitution when an argument index is present. A throwable

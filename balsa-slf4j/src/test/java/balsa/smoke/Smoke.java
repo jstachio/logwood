@@ -215,6 +215,24 @@ public final class Smoke {
 				logger.log(Level.INFO, (Object) array);
 				logger.log(Level.INFO, array.toString());
 			}
+			case "platform-named", "platform-unnamed", "virtual-named", "virtual-unnamed" -> {
+				var logger = LoggerFactory.getLogger("threads");
+				var system = System.getLogger("threads");
+				Thread.Builder builder = args[0].startsWith("virtual") ? Thread.ofVirtual() : Thread.ofPlatform();
+				builder.name(args[0].endsWith("-unnamed") ? "" : "worker");
+				Runnable body = () -> {
+					String id = Long.toString(Thread.currentThread().threadId());
+					logger.info(id);
+					logger.atInfo().addKeyValue("threadId", "spoof").log(id);
+					system.log(Level.INFO, id);
+				};
+				var first = builder.unstarted(body);
+				var second = builder.unstarted(body);
+				first.start();
+				second.start();
+				first.join();
+				second.join();
+			}
 			case "concurrent" -> {
 				var logger = LoggerFactory.getLogger("sample");
 				Thread[] threads = new Thread[8];

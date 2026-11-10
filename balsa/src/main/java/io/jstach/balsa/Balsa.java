@@ -137,8 +137,11 @@ public final class Balsa {
 			var out = new Ltsv(journal ? priority(level) : -1);
 			out.start("level");
 			out.text(level == Level.WARNING ? "WARN" : level.name());
+			var thread = Thread.currentThread();
 			out.start("thread");
-			out.text(Thread.currentThread().getName());
+			out.text(thread.getName());
+			out.start("threadId");
+			out.number(thread.threadId());
 			out.start("logger");
 			out.text(name);
 			out.start("message");
@@ -197,6 +200,8 @@ public final class Balsa {
 			var out = new Ltsv(journal ? 3 : -1);
 			out.start("level");
 			out.text("ERROR");
+			out.start("threadId");
+			out.number(Thread.currentThread().threadId());
 			out.start("logger");
 			out.text("io.jstach.balsa");
 			out.start("message");

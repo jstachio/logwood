@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class RuntimeTest {
@@ -239,6 +240,25 @@ class RuntimeTest {
 	}
 
 	@ParameterizedTest
+	@CsvSource({ "false, platform-named", "true, platform-named", "false, platform-unnamed", "true, platform-unnamed",
+			"false, virtual-named", "true, virtual-named", "false, virtual-unnamed", "true, virtual-unnamed" })
+	void bothApisIdentifyThreadsEvenWhenTheirNamesAreEmptyOrShared(boolean modular, String scenario) throws Exception {
+		var records = run(scenario, modular, null);
+		assertEquals(6, records.size());
+		var counts = new HashMap<String, Integer>();
+		for (var record : records) {
+			String id = record.get("threadId");
+			assertTrue(Long.parseLong(id) > 0);
+			assertEquals(record.get("message"), id);
+			assertEquals(scenario.endsWith("-unnamed") ? "" : "worker", record.get("thread"));
+			counts.merge(id, 1, Integer::sum);
+		}
+		assertEquals(2, counts.size());
+		assertTrue(counts.values().stream().allMatch(count -> count == 3));
+		assertEquals(2, records.stream().filter(record -> "spoof".equals(record.get("kv.threadId"))).count());
+	}
+
+	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
 	void systemObjectOverloadUsesToStringRatherThanMessageFormatOrArrayFormatting(boolean modular) throws Exception {
 		var records = run("objects", modular, null, "user.timezone=UTC");
@@ -248,9 +268,8 @@ class RuntimeTest {
 	}
 
 	@ParameterizedTest
-	@org.junit.jupiter.params.provider.CsvSource({ "false, default", "true, default", "false, SystemOnlyConfig",
-			"true, SystemOnlyConfig", "false, MdcConfig", "true, MdcConfig", "false, BadMdcConfig",
-			"true, BadMdcConfig" })
+	@CsvSource({ "false, default", "true, default", "false, SystemOnlyConfig", "true, SystemOnlyConfig",
+			"false, MdcConfig", "true, MdcConfig", "false, BadMdcConfig", "true, BadMdcConfig" })
 	void systemLoggerNeverInitializesSlf4jFacadesOrCreatesItsAdapter(boolean modular, String provider)
 			throws Exception {
 		traceInitialization = true;
@@ -265,8 +284,8 @@ class RuntimeTest {
 			assertEquals("direct", records.getFirst().get("kv.source"));
 		if (provider.equals("default"))
 			assertEquals("""
-					level:INFO\tthread:main\tlogger:system\tmessage:system only
-					level:WARN\tthread:main\tlogger:system\tmessage:argument value
+					level:INFO\tthread:main\tthreadId:1\tlogger:system\tmessage:system only
+					level:WARN\tthread:main\tthreadId:1\tlogger:system\tmessage:argument value
 					""", lastOutput);
 	}
 
@@ -398,8 +417,8 @@ class RuntimeTest {
 			assertTrue(child.waitFor(30, TimeUnit.SECONDS));
 			assertEquals(0, child.exitValue(), Files.readString(diagnostics));
 			assertEquals("""
-					level:INFO\tthread:main\tlogger:app\tmessage:SLF4J module discovery
-					level:INFO\tthread:main\tlogger:app\tmessage:System.Logger module discovery
+					level:INFO\tthread:main\tthreadId:1\tlogger:app\tmessage:SLF4J module discovery
+					level:INFO\tthread:main\tthreadId:1\tlogger:app\tmessage:System.Logger module discovery
 					""", Files.readString(diagnostics));
 		}
 		finally {
