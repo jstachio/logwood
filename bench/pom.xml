@@ -44,6 +44,10 @@
               <version>1.37</version>
             </path>
           </annotationProcessorPaths>
+          <compilerArgs combine.children="append">
+            <!-- JMH does not process JSpecify's package annotations. -->
+            <arg>-Xlint:-processing</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
       <plugin>

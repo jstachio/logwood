@@ -1,5 +1,7 @@
 package balsa.smoke;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.System.Logger.Level;
 import java.util.ListResourceBundle;
 import java.util.Map;
@@ -160,6 +162,15 @@ public final class Smoke {
 				MDC.clear();
 				if (MDC.get("key") != null)
 					throw new AssertionError("clear");
+				MDC.put("nullable", null);
+				var nullCopy = MDC.getCopyOfContextMap();
+				if (!nullCopy.containsKey("nullable") || nullCopy.get("nullable") != null)
+					throw new AssertionError("null value not copied");
+				MDC.clear();
+				MDC.setContextMap(nullCopy);
+				if (!MDC.getCopyOfContextMap().containsKey("nullable"))
+					throw new AssertionError("null value not set");
+				MDC.clear();
 				MDC.put("key", "clear with null");
 				MDC.setContextMap(null);
 				if (MDC.get("key") != null)
@@ -298,7 +309,7 @@ public final class Smoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			var values = CONTEXT.getCopyOfContextMap();
 			if (values != null)
 				values.forEach(consumer);
@@ -324,7 +335,7 @@ public final class Smoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("source", "direct");
 		}
 
@@ -338,7 +349,7 @@ public final class Smoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			var context = CONTEXT.get();
 			if (context != null)
 				context.forEach(consumer);
@@ -364,7 +375,7 @@ public final class Smoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			System.getLogger("nested").log(Level.ERROR, "nested");
 			throw new IllegalArgumentException("secret=do-not-print\nforged:yes");
 		}

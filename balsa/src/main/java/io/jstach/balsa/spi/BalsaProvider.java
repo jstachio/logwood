@@ -1,5 +1,7 @@
 package io.jstach.balsa.spi;
 
+import org.jspecify.annotations.Nullable;
+
 import io.jstach.balsa.Balsa;
 import io.jstach.balsa.BalsaLog;
 import io.jstach.balsa.spi.BalsaService.BalsaConfig;
@@ -16,7 +18,7 @@ import org.slf4j.spi.SLF4JServiceProvider;
 @SuppressWarnings("exports") // SLF4J consumers explicitly require its optional module.
 public class BalsaProvider implements SLF4JServiceProvider, ILoggerFactory, MDCAdapter {
 
-	private volatile BalsaConfig.MDCAdapter mdc;
+	private volatile BalsaConfig.@Nullable MDCAdapter mdc;
 
 	public BalsaProvider() {
 	}
@@ -63,14 +65,14 @@ public class BalsaProvider implements SLF4JServiceProvider, ILoggerFactory, MDCA
 	}
 
 	@Override
-	public void put(String key, String value) {
+	public void put(String key, @Nullable String value) {
 		var adapter = mdc;
 		if (adapter != null)
 			adapter.put(key, value);
 	}
 
 	@Override
-	public String get(String key) {
+	public @Nullable String get(String key) {
 		var adapter = mdc;
 		return adapter == null ? null : adapter.get(key);
 	}
@@ -89,14 +91,18 @@ public class BalsaProvider implements SLF4JServiceProvider, ILoggerFactory, MDCA
 			adapter.clear();
 	}
 
+	// SLF4J permits null MDC values but leaves its generic map type unannotated.
+	@SuppressWarnings("NullAway")
 	@Override
-	public Map<String, String> getCopyOfContextMap() {
+	public @Nullable Map<String, @Nullable String> getCopyOfContextMap() {
 		var adapter = mdc;
 		return adapter == null ? null : adapter.getCopyOfContextMap();
 	}
 
+	// Preserve SLF4J's nullable values across its unannotated generic boundary.
+	@SuppressWarnings("NullAway")
 	@Override
-	public void setContextMap(Map<String, String> contextMap) {
+	public void setContextMap(@Nullable Map<String, @Nullable String> contextMap) {
 		var adapter = mdc;
 		if (adapter != null)
 			adapter.setContextMap(contextMap);
@@ -108,12 +114,12 @@ public class BalsaProvider implements SLF4JServiceProvider, ILoggerFactory, MDCA
 	}
 
 	@Override
-	public String popByKey(String key) {
+	public @Nullable String popByKey(String key) {
 		return null;
 	}
 
 	@Override
-	public Deque<String> getCopyOfDequeByKey(String key) {
+	public @Nullable Deque<String> getCopyOfDequeByKey(String key) {
 		return null;
 	}
 

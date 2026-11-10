@@ -1,5 +1,7 @@
 package io.jstach.balsa;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.System.Logger.Level;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -16,7 +18,7 @@ import java.util.function.Consumer;
 
 public final class Balsa {
 
-	static final ThreadLocal<Boolean> ACTIVE = new ThreadLocal<>();
+	static final ThreadLocal<@Nullable Boolean> ACTIVE = new ThreadLocal<>();
 
 	private static final Balsa INSTANCE = new Balsa();
 
@@ -24,9 +26,9 @@ public final class Balsa {
 
 	private volatile int state; // 0=new, 1=configuring, 2=ready, 3=disabled
 
-	private BalsaConfig config;
+	private @Nullable BalsaConfig config;
 
-	private KeyValuesProvider[] keyValues;
+	private KeyValuesProvider @Nullable [] keyValues;
 
 	private int rootLevel;
 
@@ -96,11 +98,12 @@ public final class Balsa {
 		try {
 			if (name.length() > 1024)
 				return disabledLogger();
+			var settings = Objects.requireNonNull(config);
 			String current = name;
 			for (int depth = 0; !current.isEmpty(); depth++) {
 				if (depth == 64)
 					return disabledLogger();
-				Level level = config.levelOrNull(current);
+				Level level = settings.levelOrNull(current);
 				if (level != null)
 					return level.getSeverity();
 				int dot = current.lastIndexOf('.');
@@ -124,8 +127,9 @@ public final class Balsa {
 		return Integer.MAX_VALUE;
 	}
 
-	void write(String name, Level level, String message, Object[] args, Throwable thrown, Consumer<Ltsv> eventValues,
-			ResourceBundle bundle, int mode) {
+	void write(String name, Level level, @Nullable String message, @Nullable Object @Nullable [] args,
+			@Nullable Throwable thrown, @Nullable Consumer<Ltsv> eventValues, @Nullable ResourceBundle bundle,
+			int mode) {
 		if (state != 2 || ACTIVE.get() == Boolean.TRUE)
 			return;
 		ACTIVE.set(Boolean.TRUE);
@@ -139,7 +143,7 @@ public final class Balsa {
 			out.text(name);
 			out.start("message");
 			int count = args == null ? 0 : args.length;
-			if (mode == 0 && thrown == null && count > 0 && args[count - 1] instanceof Throwable t) {
+			if (mode == 0 && thrown == null && args != null && count > 0 && args[count - 1] instanceof Throwable t) {
 				thrown = t;
 				count--;
 			}
@@ -154,14 +158,14 @@ public final class Balsa {
 				out.system(message, args);
 			}
 			else if (mode == 2)
-				out.scalar(args[0]);
+				out.scalar(Objects.requireNonNull(args)[0]);
 			else
 				out.message(message, args, count);
 			if (thrown != null) {
 				out.start("error");
 				out.throwable(thrown);
 			}
-			for (var provider : keyValues)
+			for (var provider : Objects.requireNonNull(keyValues))
 				out.keyValues(provider);
 			if (eventValues != null)
 				eventValues.accept(out);
@@ -177,7 +181,7 @@ public final class Balsa {
 		}
 	}
 
-	public BalsaConfig configuration() {
+	public @Nullable BalsaConfig configuration() {
 		return state == 2 ? config : null;
 	}
 
@@ -209,7 +213,7 @@ public final class Balsa {
 	}
 
 	@SuppressWarnings("removal") // Preserve fatal-error behavior for legacy ThreadDeath.
-	public static void nonFatal(Throwable failure) {
+	public static void nonFatal(@Nullable Throwable failure) {
 		for (int depth = 0; failure != null && depth < 8; depth++) {
 			if (failure instanceof VirtualMachineError fatal && !(failure instanceof StackOverflowError))
 				throw fatal;

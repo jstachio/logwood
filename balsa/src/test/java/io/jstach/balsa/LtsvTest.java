@@ -1,5 +1,7 @@
 package io.jstach.balsa;
 
+import org.jspecify.annotations.Nullable;
+
 import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.HashSet;
@@ -59,6 +61,67 @@ class LtsvTest {
 		}
 		assertEquals("a😀é", decode(value("a😀é")));
 		assertEquals("\\udb40\\udc20", value(new String(Character.toChars(0xe0020))));
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "text", "message", "system", "object", "scalar" })
+	void nullableDataInputsAreRenderedSafely(String kind) {
+		var out = new Ltsv(-1);
+		out.start("message");
+		switch (kind) {
+			case "text" -> out.text(null);
+			case "message" -> out.message(null, null, 0);
+			case "system" -> out.system(null, null);
+			case "object" -> out.object(null, 0);
+			case "scalar" -> out.scalar(null);
+			default -> fail(kind);
+		}
+		assertEquals("""
+				message:null
+				""", out.finish());
+	}
+
+	@Test
+	void nullArgumentElementsAndContextValuesKeepTheirMeaning() {
+		var out = new Ltsv(-1);
+		out.start("slf4j");
+		out.message("value {}", new Object[] { null }, 1);
+		out.start("system");
+		out.system("value {0}", new Object[] { null });
+		out.keyValues(new KeyValuesProvider() {
+			@Override
+			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
+				consumer.accept("empty", null);
+				consumer.accept(null, "ignored");
+			}
+		});
+		out.writeKeyValues();
+		assertEquals("""
+				slf4j:value null\tsystem:value null\tkv.empty:\ttruncated:true
+				""", out.finish());
+	}
+
+	@Test
+	void throwableCauseIsReadOncePerNode() {
+		var reads = new java.util.concurrent.atomic.AtomicInteger();
+		var cause = new IllegalArgumentException("cause");
+		cause.setStackTrace(new StackTraceElement[0]);
+		var error = new IllegalStateException("outer") {
+			@Override
+			public synchronized Throwable getCause() {
+				if (reads.incrementAndGet() > 1)
+					throw new AssertionError("cause read twice");
+				return cause;
+			}
+		};
+		error.setStackTrace(new StackTraceElement[0]);
+		var out = new Ltsv(-1);
+		out.start("error");
+		out.throwable(error);
+		String record = out.finish();
+		assertEquals(1, reads.get());
+		assertTrue(record.contains("Caused by: java.lang.IllegalArgumentException: cause"));
+		assertFalse(record.contains("throwable failed"));
 	}
 
 	@Test
@@ -145,10 +208,10 @@ class LtsvTest {
 
 	@Test
 	void keyValueCallbacksAreBoundedAndTheirConsumerExpiresAfterTheCall() {
-		var retained = new java.util.concurrent.atomic.AtomicReference<java.util.function.BiConsumer<String, String>>();
+		var retained = new java.util.concurrent.atomic.AtomicReference<java.util.function.BiConsumer<@Nullable String, @Nullable String>>();
 		var config = new KeyValuesProvider() {
 			@Override
-			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
 				retained.set(consumer);
 				for (int i = 0; i < 1000; i++)
 					consumer.accept("key" + i, "value");
@@ -170,7 +233,7 @@ class LtsvTest {
 		var out = new Ltsv(-1);
 		out.keyValues(new KeyValuesProvider() {
 			@Override
-			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
 				consumer.accept("request", "outer");
 				consumer.accept("request", "inner");
 			}
@@ -193,7 +256,7 @@ class LtsvTest {
 		var out = new Ltsv(-1);
 		out.keyValues(new KeyValuesProvider() {
 			@Override
-			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
 				for (int i = 0; i < 32; i++)
 					consumer.accept("context" + i, "value");
 			}
@@ -223,14 +286,14 @@ class LtsvTest {
 		var out = new Ltsv(-1);
 		out.keyValues(new KeyValuesProvider() {
 			@Override
-			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
 				for (int i = 0; i < 32; i++)
 					consumer.accept("key" + i, "original");
 			}
 		});
 		out.keyValues(new KeyValuesProvider() {
 			@Override
-			public void keyValues(java.util.function.BiConsumer<String, String> consumer) {
+			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
 				consumer.accept("key0", "override");
 				consumer.accept("overflow", "ignored");
 			}

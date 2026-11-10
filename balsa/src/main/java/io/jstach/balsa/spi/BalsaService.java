@@ -1,5 +1,7 @@
 package io.jstach.balsa.spi;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.System.Logger.Level;
 import java.util.Locale;
 import java.util.Map;
@@ -24,7 +26,7 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 		}
 
 		/** Returns a threshold, or null to inherit. Defaults to balsa.level[.name]. */
-		public Level levelOrNull(String loggerName) {
+		public @Nullable Level levelOrNull(String loggerName) {
 			String value = propertyOrNull(loggerName.isEmpty() ? "balsa.level" : "balsa.level." + loggerName);
 			if (value == null)
 				return null;
@@ -39,12 +41,12 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 		 * include MDC in records, push its entries from a {@link KeyValuesProvider}. The
 		 * default retains no context: null selects the no-op bridge.
 		 */
-		public MDCAdapter createMDCAdapter() {
+		public @Nullable MDCAdapter createMDCAdapter() {
 			return null;
 		}
 
 		/** Reads balsa.level, balsa.level.name, and balsa.journald; null means absent. */
-		public String propertyOrNull(String key) {
+		public @Nullable String propertyOrNull(String key) {
 			return System.getProperty(key);
 		}
 
@@ -56,10 +58,10 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 		 */
 		public interface MDCAdapter {
 
-			default void put(String key, String value) {
+			default void put(String key, @Nullable String value) {
 			}
 
-			default String get(String key) {
+			default @Nullable String get(String key) {
 				return null;
 			}
 
@@ -69,11 +71,11 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 			default void clear() {
 			}
 
-			default Map<String, String> getCopyOfContextMap() {
+			default @Nullable Map<String, @Nullable String> getCopyOfContextMap() {
 				return null;
 			}
 
-			default void setContextMap(Map<String, String> contextMap) {
+			default void setContextMap(@Nullable Map<String, @Nullable String> contextMap) {
 			}
 
 		}
@@ -84,7 +86,8 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 	 * Pushes context synchronously without invoking a logging facade. Providers run in
 	 * ascending order; later providers override earlier values for the same key. Equal
 	 * orders retain discovery order. Fluent event fields have final precedence. Do not
-	 * retain the consumer. The context budget is shared by all providers.
+	 * retain the consumer. The context budget is shared by all providers. Null keys are
+	 * skipped with a truncation marker; null values produce empty fields.
 	 */
 	abstract non-sealed class KeyValuesProvider implements BalsaService {
 
@@ -98,7 +101,7 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 			return 0;
 		}
 
-		public abstract void keyValues(BiConsumer<String, String> consumer);
+		public abstract void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer);
 
 	}
 

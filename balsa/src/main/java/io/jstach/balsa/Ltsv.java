@@ -1,5 +1,7 @@
 package io.jstach.balsa;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -10,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
-final class Ltsv implements BiConsumer<String, String> {
+final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 
 	static final int RECORD = 16_384, VALUE = 4096, KEY = 256;
 
@@ -22,7 +24,7 @@ final class Ltsv implements BiConsumer<String, String> {
 
 	private int end, frames, throwables, fields;
 
-	private Map<String, Object> keyValues;
+	private @Nullable Map<String, @Nullable Object> keyValues;
 
 	private boolean collecting;
 
@@ -56,7 +58,7 @@ final class Ltsv implements BiConsumer<String, String> {
 			text(Long.toString(value));
 	}
 
-	void text(String value) {
+	void text(@Nullable String value) {
 		if (value == null)
 			value = "null";
 		text(value, 0, value.length());
@@ -136,7 +138,7 @@ final class Ltsv implements BiConsumer<String, String> {
 			.append(HEX.charAt(c & 15));
 	}
 
-	void message(String pattern, Object[] args, int count) {
+	void message(@Nullable String pattern, @Nullable Object @Nullable [] args, int count) {
 		if (pattern == null || args == null || count == 0) {
 			text(pattern);
 			return;
@@ -162,7 +164,7 @@ final class Ltsv implements BiConsumer<String, String> {
 			truncated = true;
 	}
 
-	void object(Object value, int depth) {
+	void object(@Nullable Object value, int depth) {
 		if (out.length() >= end) {
 			truncated = true;
 			return;
@@ -204,7 +206,7 @@ final class Ltsv implements BiConsumer<String, String> {
 		}
 	}
 
-	void scalar(Object value) {
+	void scalar(@Nullable Object value) {
 		try {
 			text(String.valueOf(value));
 		}
@@ -214,7 +216,7 @@ final class Ltsv implements BiConsumer<String, String> {
 		}
 	}
 
-	void system(String pattern, Object[] args) {
+	void system(@Nullable String pattern, @Nullable Object @Nullable [] args) {
 		if (pattern == null || args == null || args.length == 0) {
 			text(pattern);
 			return;
@@ -239,7 +241,7 @@ final class Ltsv implements BiConsumer<String, String> {
 			truncated = true;
 			return;
 		}
-		Object[] safe = new Object[Math.min(args.length, 32)];
+		@Nullable Object[] safe = new @Nullable Object[Math.min(args.length, 32)];
 		try {
 			for (int i = 0; i < safe.length; i++) {
 				if ((indices & (1L << i)) == 0)
@@ -317,16 +319,16 @@ final class Ltsv implements BiConsumer<String, String> {
 	}
 
 	@Override
-	public void accept(String key, String value) {
+	public void accept(@Nullable String key, @Nullable String value) {
 		if (collecting)
 			put(key, value, 32);
 	}
 
-	void eventValue(String key, Object value) {
+	void eventValue(@Nullable String key, @Nullable Object value) {
 		put(key, value, 64);
 	}
 
-	private void put(String key, Object value, int limit) {
+	private void put(@Nullable String key, @Nullable Object value, int limit) {
 		if (key == null || key.length() > KEY) {
 			truncated = true;
 			return;
@@ -352,7 +354,7 @@ final class Ltsv implements BiConsumer<String, String> {
 		}
 	}
 
-	void extra(String prefix, String key, Object value) {
+	void extra(String prefix, @Nullable String key, @Nullable Object value) {
 		if (key == null) {
 			truncated = true;
 			return;
@@ -452,9 +454,10 @@ final class Ltsv implements BiConsumer<String, String> {
 			}
 			if (suppressed.length > 4)
 				truncated = true;
-			if (thrown.getCause() != null && out.length() < end) {
+			var cause = thrown.getCause();
+			if (cause != null && out.length() < end) {
 				text("\nCaused by: ");
-				throwable(thrown.getCause());
+				throwable(cause);
 			}
 		}
 		catch (Throwable failure) {

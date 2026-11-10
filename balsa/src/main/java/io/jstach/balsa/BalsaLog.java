@@ -1,5 +1,7 @@
 package io.jstach.balsa;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.ObjectStreamException;
 import org.slf4j.Marker;
 import org.slf4j.event.LoggingEvent;
@@ -70,8 +72,8 @@ public final class BalsaLog extends LegacyAbstractLogger implements LoggingEvent
 	}
 
 	@Override
-	protected void handleNormalizedLoggingCall(org.slf4j.event.Level level, Marker marker, String pattern,
-			Object[] args, Throwable thrown) {
+	protected void handleNormalizedLoggingCall(org.slf4j.event.Level level, @Nullable Marker marker,
+			@Nullable String pattern, @Nullable Object @Nullable [] args, @Nullable Throwable thrown) {
 		balsa.write(name, system(level), pattern, args, thrown, null, null, 0);
 	}
 
@@ -80,9 +82,9 @@ public final class BalsaLog extends LegacyAbstractLogger implements LoggingEvent
 		if (!isErrorEnabled() || Balsa.ACTIVE.get() == Boolean.TRUE)
 			return;
 		System.Logger.Level level;
-		String message;
-		Object[] args;
-		Throwable thrown;
+		@Nullable String message;
+		@Nullable Object @Nullable [] args;
+		@Nullable Throwable thrown;
 		Balsa.ACTIVE.set(Boolean.TRUE);
 		try {
 			level = system(event.getLevel());

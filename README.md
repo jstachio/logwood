@@ -202,7 +202,7 @@ records have fixed limits; clipping is explicit as `truncated:true`.
 Balsa retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
 
-The core has ten class files plus `module-info.class`; optional JPMS SLF4J
+The core has ten types plus package and module descriptors; optional JPMS SLF4J
 registration adds one class and its descriptor. Runtime jars omit
 compiler debugging tables, Maven descriptors, and build-environment manifest fields. To build with source/line
 information for debugging:
@@ -210,6 +210,29 @@ information for debugging:
 ```sh
 ./mvnw clean package -Dmaven.compiler.debuglevel=lines,source
 ```
+
+## Nullability
+
+Every production package, including internal packages, has package-info.java
+with JSpecify `@NullMarked`. Nullable settings, messages, context data, arrays,
+array elements, and return values use explicit `@Nullable` type annotations.
+JSpecify is a normal transitive Maven dependency, following its
+[dependency guidance](https://jspecify.dev/docs/using/), so consumers can read the
+published contracts. Its JPMS requirement is static; logging still runs when the
+annotation JAR is omitted from the runtime.
+
+Run the library nullness check with JDK 25+:
+
+```sh
+bin/analyze.sh
+```
+
+This runs NullAway in JSpecify mode with JDK nullness models and checks explicit
+null marking. It checks production library sources; test-only driver packages
+are explicitly NullUnmarked because they exercise invalid inputs. Two MDC map
+forwarders have narrow analyzer suppressions for SLF4J's unannotated generic map
+boundary, retaining nullable values allowed by that API. Integration tests cover
+null values and copies in both directions. Normal builds still target Java 21.
 
 ## Measurements
 

@@ -1,6 +1,9 @@
 package io.jstach.balsa.bench;
 
+import org.jspecify.annotations.Nullable;
+
 import java.io.OutputStream;
+import java.util.Objects;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
@@ -17,9 +20,9 @@ import org.slf4j.simple.SimpleServiceProvider;
 @Fork(2)
 public class LoggingBench {
 
-	private Logger balsa, simple;
+	private @Nullable Logger balsa, simple;
 
-	private PrintStream original;
+	private @Nullable PrintStream original;
 
 	private Object argument = 42;
 
@@ -39,47 +42,47 @@ public class LoggingBench {
 
 	@TearDown(Level.Trial)
 	public void tearDown() {
-		System.setOut(original);
+		System.setOut(Objects.requireNonNull(original));
 	}
 
 	@Benchmark
 	public void balsaDisabled() {
-		balsa.debug("value {}", argument);
+		Objects.requireNonNull(balsa).debug("value {}", argument);
 	}
 
 	@Benchmark
 	public void simpleDisabled() {
-		simple.debug("value {}", argument);
+		Objects.requireNonNull(simple).debug("value {}", argument);
 	}
 
 	@Benchmark
 	public void balsaPlain() {
-		balsa.info("hello world");
+		Objects.requireNonNull(balsa).info("hello world");
 	}
 
 	@Benchmark
 	public void simplePlain() {
-		simple.info("hello world");
+		Objects.requireNonNull(simple).info("hello world");
 	}
 
 	@Benchmark
 	public void balsaArgument() {
-		balsa.info("value {}", argument);
+		Objects.requireNonNull(balsa).info("value {}", argument);
 	}
 
 	@Benchmark
 	public void simpleArgument() {
-		simple.info("value {}", argument);
+		Objects.requireNonNull(simple).info("value {}", argument);
 	}
 
 	@Benchmark
 	public void balsaEscaping() {
-		balsa.info("line\n\u001b[8m {}", argument);
+		Objects.requireNonNull(balsa).info("line\n\u001b[8m {}", argument);
 	}
 
 	@Benchmark
 	public void simpleEscaping() {
-		simple.info("line\n\u001b[8m {}", argument);
+		Objects.requireNonNull(simple).info("line\n\u001b[8m {}", argument);
 	}
 
 }

@@ -1,5 +1,7 @@
 package balsa.smoke;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.System.Logger.Level;
 import java.util.ListResourceBundle;
 import java.util.function.BiConsumer;
@@ -21,6 +23,15 @@ public final class SystemOnlySmoke {
 		}
 		catch (ClassNotFoundException expected) {
 		}
+		if (ModuleLayer.boot().findModule("org.jspecify").isPresent())
+			throw new AssertionError("JSpecify module resolved");
+		try {
+			Class.forName("org.jspecify.annotations.Nullable", false, ClassLoader.getSystemClassLoader());
+			throw new AssertionError("JSpecify is present at runtime");
+		}
+		catch (ClassNotFoundException expected) {
+		}
+
 		// Reflecting the SPI must not require any SLF4J return or parameter types.
 		BalsaService.class.getPermittedSubclasses();
 		BalsaConfig.class.getMethods();
@@ -78,7 +89,7 @@ public final class SystemOnlySmoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			System.getLogger("nested").log(Level.ERROR, "nested");
 			consumer.accept("source", "direct");
 		}
@@ -120,7 +131,7 @@ public final class SystemOnlySmoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("winner", "low");
 			consumer.accept("low.instances", Integer.toString(instances));
 		}
@@ -142,7 +153,7 @@ public final class SystemOnlySmoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("winner", "high");
 			consumer.accept("high.instances", Integer.toString(instances));
 			consumer.accept("config.instances", Integer.toString(CountingConfig.instances));
@@ -156,7 +167,7 @@ public final class SystemOnlySmoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("tie", "first");
 		}
 
@@ -168,7 +179,7 @@ public final class SystemOnlySmoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("tie", "second");
 		}
 
@@ -185,7 +196,7 @@ public final class SystemOnlySmoke {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			throw new AssertionError("called");
 		}
 

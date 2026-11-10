@@ -337,7 +337,11 @@ class RuntimeTest {
 		var command = List.of(Path.of(System.getProperty("java.home"), "bin", "javac").toString(), "--release", "21",
 				"--module-path",
 				Path.of(BalsaConfig.class.getProtectionDomain().getCodeSource().getLocation().toURI())
-						+ File.pathSeparator + api,
+						+ File.pathSeparator + api + File.pathSeparator
+						+ Path.of(org.jspecify.annotations.Nullable.class.getProtectionDomain()
+							.getCodeSource()
+							.getLocation()
+							.toURI()),
 				"-d", configModule.toString(), moduleInfo.toString(), config.toString());
 		Path diagnostics = temp.resolve("javac.txt");
 		var compiler = new ProcessBuilder(command).redirectErrorStream(true)

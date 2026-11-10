@@ -1,5 +1,7 @@
 package io.jstach.balsa;
 
+import org.jspecify.annotations.Nullable;
+
 import static org.junit.jupiter.api.Assertions.*;
 import java.io.File;
 import java.nio.file.Files;
@@ -35,6 +37,11 @@ class OptionalSlf4jTest {
 			}
 		}
 		return coreJar;
+	}
+
+	private String compilationModules() throws Exception {
+		return jar() + File.pathSeparator + Path
+			.of(org.jspecify.annotations.Nullable.class.getProtectionDomain().getCodeSource().getLocation().toURI());
 	}
 
 	private String run(boolean modular, boolean observableApi, String provider, String scenario) throws Exception {
@@ -193,7 +200,7 @@ class OptionalSlf4jTest {
 						""");
 		Path classes = temp.resolve("app-classes");
 		var compiler = List.of(Path.of(System.getProperty("java.home"), "bin", "javac").toString(), "--release", "21",
-				"--module-path", jar().toString(), "-d", classes.toString(),
+				"--module-path", compilationModules(), "-d", classes.toString(),
 				source.resolve("module-info.java").toString(), source.resolve("sample/app/Settings.java").toString(),
 				values.toString(), app.toString());
 		assertEquals("", launch(compiler, temp));
@@ -212,8 +219,9 @@ class OptionalSlf4jTest {
 		Files.writeString(app, "package sample; public class Main { io.jstach.balsa.Balsa implementation; }");
 		Path diagnostics = temp.resolve("hidden-errors");
 		var compiler = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "javac").toString(),
-				"--release", "21", "--module-path", jar().toString(), "-d", temp.resolve("hidden-classes").toString(),
-				sources.resolve("module-info.java").toString(), app.toString())
+				"--release", "21", "--module-path", compilationModules(), "-d",
+				temp.resolve("hidden-classes").toString(), sources.resolve("module-info.java").toString(),
+				app.toString())
 			.redirectErrorStream(true)
 			.redirectOutput(diagnostics.toFile())
 			.start();

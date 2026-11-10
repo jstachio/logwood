@@ -1,5 +1,7 @@
 package io.jstach.balsa;
 
+import org.jspecify.annotations.Nullable;
+
 import java.util.Objects;
 import java.util.ResourceBundle;
 import java.util.function.Supplier;
@@ -36,13 +38,15 @@ final class BalsaSystemLogger implements System.Logger {
 	}
 
 	@Override
-	public void log(System.Logger.Level level, ResourceBundle bundle, String message, Throwable thrown) {
+	public void log(System.Logger.Level level, @Nullable ResourceBundle bundle, @Nullable String message,
+			@Nullable Throwable thrown) {
 		if (isLoggable(level))
 			balsa.write(name, level, message, null, thrown, null, bundle, 1);
 	}
 
 	@Override
-	public void log(System.Logger.Level level, ResourceBundle bundle, String pattern, Object... args) {
+	public void log(System.Logger.Level level, @Nullable ResourceBundle bundle, @Nullable String pattern,
+			@Nullable Object @Nullable ... args) {
 		if (isLoggable(level))
 			balsa.write(name, level, pattern, args, null, null, bundle, 1);
 	}
@@ -60,11 +64,11 @@ final class BalsaSystemLogger implements System.Logger {
 	}
 
 	@Override
-	public void log(System.Logger.Level level, Supplier<String> supplier, Throwable thrown) {
+	public void log(System.Logger.Level level, Supplier<String> supplier, @Nullable Throwable thrown) {
 		Objects.requireNonNull(supplier, "supplier");
 		if (!isLoggable(level) || Balsa.ACTIVE.get() == Boolean.TRUE)
 			return;
-		String message;
+		@Nullable String message;
 		Balsa.ACTIVE.set(Boolean.TRUE);
 		try {
 			message = supplier.get();

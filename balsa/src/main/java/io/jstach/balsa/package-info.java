@@ -1,7 +1,7 @@
 /**
- * Minimal console logging. Fields are escaped, custom labels are namespaced, records and
- * traversal are bounded, and MDC stores nothing by default. Global settings initialize
- * once. Each logger resolves its own threshold at first use and retains it in the
- * caller-owned logger object. See BalsaConfig for the application SPI.
+ * Bounded logging and encoding internals. Global settings initialize once; logger
+ * thresholds resolve at first use. The application SPI is
+ * io.jstach.balsa.spi.BalsaService.
  */
+@org.jspecify.annotations.NullMarked
 package io.jstach.balsa;

@@ -1,5 +1,7 @@
 package io.jstach.balsa.example;
 
+import org.jspecify.annotations.Nullable;
+
 import java.lang.System.Logger.Level;
 import java.util.function.BiConsumer;
 import io.jstach.balsa.spi.BalsaService.BalsaConfig;
@@ -26,7 +28,7 @@ public final class Main {
 		}
 
 		@Override
-		public Level levelOrNull(String name) {
+		public @Nullable Level levelOrNull(String name) {
 			Level configured = super.levelOrNull(name);
 			return configured != null ? configured : name.equals("example") ? Level.DEBUG : null;
 		}
@@ -44,7 +46,7 @@ public final class Main {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("app", "fallback");
 			consumer.accept("component", "default");
 		}
@@ -57,7 +59,7 @@ public final class Main {
 		}
 
 		@Override
-		public void keyValues(BiConsumer<String, String> consumer) {
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("app", "balsa-example");
 			consumer.accept("component", "application");
 		}

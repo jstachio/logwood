@@ -3,6 +3,7 @@
  * without SLF4J because its descriptor does not declare an SLF4J service type.
  */
 module io.jstach.balsa.slf4j {
+  requires static org.jspecify;
   requires transitive io.jstach.balsa;
   requires transitive org.slf4j;
   provides org.slf4j.spi.SLF4JServiceProvider with io.jstach.balsa.slf4j.Slf4jProvider;

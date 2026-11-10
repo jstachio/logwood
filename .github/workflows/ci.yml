@@ -24,3 +24,6 @@ jobs:
             -Dmaven.deploy.skip=false \
             "-DaltDeploymentRepository=example-check::file://${example_repo}"
           test ! -e "${example_repo}/io/jstach/balsa/balsa-example"
+      - name: Check library nullness
+        if: matrix.java == '25'
+        run: bin/analyze.sh
