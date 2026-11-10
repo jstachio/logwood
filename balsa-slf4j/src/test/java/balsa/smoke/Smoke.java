@@ -215,6 +215,15 @@ public final class Smoke {
 				logger.log(Level.INFO, (Object) array);
 				logger.log(Level.INFO, array.toString());
 			}
+			case "clock" -> {
+				var logger = LoggerFactory.getLogger("clock");
+				var system = System.getLogger("clock");
+				logger.debug("disabled");
+				system.log(Level.DEBUG, "disabled");
+				logger.info("classic");
+				logger.atInfo().addKeyValue("time", "spoof").log("fluent");
+				system.log(Level.INFO, "system");
+			}
 			case "platform-named", "platform-unnamed", "virtual-named", "virtual-unnamed" -> {
 				var logger = LoggerFactory.getLogger("threads");
 				var system = System.getLogger("threads");
@@ -396,6 +405,23 @@ public final class Smoke {
 		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			System.getLogger("nested").log(Level.ERROR, "nested");
 			throw new IllegalArgumentException("secret=do-not-print\nforged:yes");
+		}
+
+	}
+
+	public static final class ClockConfig extends BalsaConfig {
+
+		private final java.util.concurrent.atomic.AtomicLong calls = new java.util.concurrent.atomic.AtomicLong();
+
+		public ClockConfig() {
+		}
+
+		@Override
+		public long now() {
+			if (Boolean.getBoolean("test.clock.fail"))
+				throw new IllegalArgumentException("secret=do-not-print\nforged:yes");
+			System.getLogger("nested").log(Level.ERROR, "clock reentry should be suppressed");
+			return 1_700_000_000_123L + calls.getAndIncrement();
 		}
 
 	}

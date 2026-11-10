@@ -83,7 +83,7 @@ class RuntimeTest {
 						type + " initialized during System.Logger use");
 		}
 		String data = Files.readString(stdout);
-		lastOutput = stableThreadIds(data);
+		lastOutput = stableMetadata(data);
 		assertFalse(data.contains("secret=do-not-print"));
 		assertFalse(data.contains("\r"));
 		List<Map<String, String>> records = new ArrayList<>();
@@ -106,9 +106,11 @@ class RuntimeTest {
 		return records;
 	}
 
-	private static String stableThreadIds(String output) {
-		// Keep numeric IDs in parsed records; normalize only golden text expectations.
-		return output.replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t");
+	private static String stableMetadata(String output) {
+		// Keep timestamps and IDs in parsed records; normalize only golden text
+		// expectations.
+		return output.replaceAll("(?m)^time:[^\\t\\r\\n]+\\t", "time:<time>\t")
+			.replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t");
 	}
 
 	private static String decode(String input) {
@@ -146,6 +148,34 @@ class RuntimeTest {
 		assertEquals("spoof", records.get(2).get("kv.level"));
 		assertEquals("ERROR", records.get(2).get("level"));
 		assertEquals(2, run("system-first", modular, null).size());
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,false", "true,false", "false,true", "true,true" })
+	void clockIsReadOncePerEnabledEventAndSkippedForJournald(boolean modular, boolean journal) throws Exception {
+		var records = run("clock", modular, "balsa.smoke.Smoke$ClockConfig", "balsa.journald=" + journal,
+				"test.clock.fail=" + journal, "user.timezone=Pacific/Chatham", "user.language=ar", "user.country=EG");
+		assertEquals(List.of("classic", "fluent", "system"), records.stream().map(r -> r.get("message")).toList());
+		if (journal) {
+			assertTrue(records.stream().allMatch(r -> !r.containsKey("time")));
+			assertTrue(records.stream().allMatch(r -> "6".equals(r.get("priority"))));
+		}
+		else
+			assertEquals(List.of("2023-11-14T22:13:20.123Z", "2023-11-14T22:13:20.124Z", "2023-11-14T22:13:20.125Z"),
+					records.stream().map(r -> r.get("time")).toList());
+		assertEquals("spoof", records.get(1).get("kv.time"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void failingClockProducesOneSanitizedDiagnosticWithASystemTimestamp(boolean modular) throws Exception {
+		var records = run("clock", modular, "balsa.smoke.Smoke$ClockConfig", "test.clock.fail=true");
+		assertEquals(1, records.size());
+		assertEquals("Balsa could not encode a log event", records.getFirst().get("message"));
+		String time = records.getFirst().get("time");
+		assertNotNull(time);
+		assertTrue(time.matches("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z"));
+		java.time.Instant.parse(time);
 	}
 
 	@ParameterizedTest
@@ -289,8 +319,8 @@ class RuntimeTest {
 			assertEquals("direct", records.getFirst().get("kv.source"));
 		if (provider.equals("default"))
 			assertEquals("""
-					level:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
-					level:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value
+					time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
+					time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value
 					""", lastOutput);
 	}
 
@@ -421,10 +451,12 @@ class RuntimeTest {
 		try {
 			assertTrue(child.waitFor(30, TimeUnit.SECONDS));
 			assertEquals(0, child.exitValue(), Files.readString(diagnostics));
-			assertEquals("""
-					level:INFO\tthread:main\tthreadId:<id>\tlogger:app\tmessage:SLF4J module discovery
-					level:INFO\tthread:main\tthreadId:<id>\tlogger:app\tmessage:System.Logger module discovery
-					""", stableThreadIds(Files.readString(diagnostics)));
+			assertEquals(
+					"""
+							time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:app\tmessage:SLF4J module discovery
+							time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:app\tmessage:System.Logger module discovery
+							""",
+					stableMetadata(Files.readString(diagnostics)));
 		}
 		finally {
 			child.destroyForcibly();

@@ -6,7 +6,11 @@ import java.lang.reflect.Array;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.MessageFormat;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
 import java.util.Date;
+import java.util.Locale;
 import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -19,6 +23,9 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 	private static final int CONTENT = RECORD - 32;
 
 	private static final String HEX = "0123456789abcdef";
+
+	private static final DateTimeFormatter TIME = new DateTimeFormatterBuilder().appendInstant(3)
+		.toFormatter(Locale.ROOT);
 
 	private final StringBuilder out = new StringBuilder(128);
 
@@ -56,6 +63,11 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 			out.append(value);
 		else
 			text(Long.toString(value));
+	}
+
+	void time(long epochMillis) {
+		start("time");
+		text(TIME.format(Instant.ofEpochMilli(epochMillis)));
 	}
 
 	void text(@Nullable String value) {

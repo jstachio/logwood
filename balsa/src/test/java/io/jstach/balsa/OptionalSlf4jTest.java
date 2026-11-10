@@ -89,26 +89,30 @@ class OptionalSlf4jTest {
 			child.destroyForcibly();
 		}
 		// JVM-assigned IDs vary across JDKs; retain exact checks for all other data.
-		return Files.readString(stdout).replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t");
+		return Files.readString(stdout)
+			.replaceAll("(?m)^time:[^\\t\\r\\n]+\\t", "time:<time>\t")
+			.replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t");
 	}
 
 	@ParameterizedTest
 	@CsvSource({ "false,false", "true,false", "true,true" })
 	void systemLoggerWorksWithSlf4jAbsentOrUnresolved(boolean modular, boolean observableApi) throws Exception {
 		assertEquals("""
-				level:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
-				level:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
+				time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value
 				""", run(modular, observableApi, null, "basic"));
 	}
 
 	@ParameterizedTest
 	@CsvSource({ "false,false", "true,false", "true,true" })
 	void spiAndContextWorkWithoutLoadingAnySlf4jTypes(boolean modular, boolean observableApi) throws Exception {
-		assertEquals("""
-				level:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only\tkv.source:direct
-				level:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value\tkv.source:direct
-				""", run(modular, observableApi,
-				"balsa.smoke.SystemOnlySmoke$Settings\nbalsa.smoke.SystemOnlySmoke$Values", "basic"));
+		assertEquals(
+				"""
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only\tkv.source:direct
+						time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value\tkv.source:direct
+						""",
+				run(modular, observableApi, "balsa.smoke.SystemOnlySmoke$Settings\nbalsa.smoke.SystemOnlySmoke$Values",
+						"basic"));
 	}
 
 	@ParameterizedTest
@@ -123,9 +127,11 @@ class OptionalSlf4jTest {
 		assertTrue(lines.get(3).endsWith("message:value java.lang.IllegalStateException: argument"));
 		assertTrue(lines.get(4).contains("\terror:java.lang.IllegalStateException: line\\n\\u001b[8m"));
 		String failure = run(modular, false, "balsa.smoke.SystemOnlySmoke$BadSettings", "basic");
-		assertEquals("""
-				level:ERROR\tthreadId:<id>\tlogger:io.jstach.balsa\tmessage:Balsa disabled: invalid configuration
-				""", failure);
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.balsa\tmessage:Balsa disabled: invalid configuration
+						""",
+				failure);
 	}
 
 	@ParameterizedTest
@@ -140,7 +146,7 @@ class OptionalSlf4jTest {
 				""";
 		String output = run(modular, false, services, "services");
 		String record = """
-				level:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:services\tkv.winner:high\tkv.low.instances:1\tkv.tie:first\tkv.high.instances:1\tkv.config.instances:1
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:services\tkv.winner:high\tkv.low.instances:1\tkv.tie:first\tkv.high.instances:1\tkv.config.instances:1
 				""";
 		assertEquals(record.repeat(2), output);
 	}
@@ -152,9 +158,11 @@ class OptionalSlf4jTest {
 				balsa.smoke.SystemOnlySmoke$BadOrder
 				balsa.smoke.SystemOnlySmoke$LowValues
 				""";
-		assertEquals("""
-				level:ERROR\tthreadId:<id>\tlogger:io.jstach.balsa\tmessage:Balsa disabled: invalid configuration
-				""", run(modular, false, services, "basic"));
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.balsa\tmessage:Balsa disabled: invalid configuration
+						""",
+				run(modular, false, services, "basic"));
 	}
 
 	@Test
@@ -207,9 +215,11 @@ class OptionalSlf4jTest {
 		assertEquals("", launch(compiler, temp));
 		String output = launch(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
 				"--module-path", jar() + File.pathSeparator + classes, "-m", "sample.app/sample.app.Main"), temp);
-		assertEquals("""
-				level:DEBUG\tthread:main\tthreadId:<id>\tlogger:app\tmessage:named application\tkv.app:named
-				""", output);
+		assertEquals(
+				"""
+						time:<time>\tlevel:DEBUG\tthread:main\tthreadId:<id>\tlogger:app\tmessage:named application\tkv.app:named
+						""",
+				output);
 	}
 
 	@Test

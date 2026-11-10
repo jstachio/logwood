@@ -135,6 +135,8 @@ public final class Balsa {
 		ACTIVE.set(Boolean.TRUE);
 		try {
 			var out = new Ltsv(journal ? priority(level) : -1);
+			if (!journal)
+				out.time(Objects.requireNonNull(config).now());
 			out.start("level");
 			out.text(level == Level.WARNING ? "WARN" : level.name());
 			var thread = Thread.currentThread();
@@ -198,6 +200,8 @@ public final class Balsa {
 			return;
 		try {
 			var out = new Ltsv(journal ? 3 : -1);
+			if (!journal)
+				out.time(System.currentTimeMillis());
 			out.start("level");
 			out.text("ERROR");
 			out.start("threadId");

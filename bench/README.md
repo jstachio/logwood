@@ -6,7 +6,7 @@ facade provider selection. Each receives the same PrintStream backed by
 OutputStream.nullOutputStream(), so results measure formatting, escaping,
 allocation, encoding, and synchronization rather than a physical terminal.
 Balsa writes fixed UTF-8 bytes; slf4j-simple uses its UTF-8 PrintStream.
-Balsa emits labeled LTSV fields and performs defensive escaping; slf4j-simple's
+Balsa emits a UTC timestamp and labeled LTSV fields and performs defensive escaping; slf4j-simple's
 standard output is unescaped. The escaping case deliberately measures that
 security difference, not equivalent output bytes.
 

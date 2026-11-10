@@ -12,6 +12,10 @@ import org.junit.jupiter.api.Test;
 
 class CoreTest {
 
+	private static String stableTime(String output) {
+		return output.replaceAll("(?m)^time:[^\\t\\r\\n]+\\t", "time:<time>\t");
+	}
+
 	private static Balsa fresh() throws Exception {
 		var constructor = Balsa.class.getDeclaredConstructor();
 		constructor.setAccessible(true);
@@ -81,10 +85,10 @@ class CoreTest {
 		}
 		assertEquals(
 				"""
-						level:ERROR\tthreadId:%d\tlogger:io.jstach.balsa\tmessage:Balsa disabled a logger: invalid level configuration
+						time:<time>\tlevel:ERROR\tthreadId:%d\tlogger:io.jstach.balsa\tmessage:Balsa disabled a logger: invalid level configuration
 						"""
 					.formatted(Thread.currentThread().threadId()),
-				bytes.toString(StandardCharsets.UTF_8));
+				stableTime(bytes.toString(StandardCharsets.UTF_8)));
 	}
 
 	@Test
@@ -107,9 +111,9 @@ class CoreTest {
 			System.setOut(before);
 		}
 		assertEquals("""
-				level:INFO\tthread:%s\tthreadId:%d\tlogger:utf8\tmessage:é😀
+				time:<time>\tlevel:INFO\tthread:%s\tthreadId:%d\tlogger:utf8\tmessage:é😀
 				""".formatted(Thread.currentThread().getName(), Thread.currentThread().threadId()),
-				bytes.toString(StandardCharsets.UTF_8));
+				stableTime(bytes.toString(StandardCharsets.UTF_8)));
 	}
 
 	@Test
@@ -132,9 +136,9 @@ class CoreTest {
 			System.setOut(before);
 		}
 		assertEquals("""
-				level:INFO\tthread:%s\tthreadId:%d\tlogger:stdout\tmessage:outer
+				time:<time>\tlevel:INFO\tthread:%s\tthreadId:%d\tlogger:stdout\tmessage:outer
 				""".formatted(Thread.currentThread().getName(), Thread.currentThread().threadId()),
-				bytes.toString(StandardCharsets.UTF_8));
+				stableTime(bytes.toString(StandardCharsets.UTF_8)));
 	}
 
 }

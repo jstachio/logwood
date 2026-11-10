@@ -25,6 +25,16 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 		public BalsaConfig() {
 		}
 
+		/**
+		 * Current epoch milliseconds, defaulting to the system wall clock. Called once
+		 * for each enabled event outside journald mode. Overrides must be thread-safe.
+		 * Failure diagnostics use the system clock independently of this callback.
+		 * @return milliseconds since 1970-01-01T00:00:00Z.
+		 */
+		public long now() {
+			return System.currentTimeMillis();
+		}
+
 		/** Returns a threshold, or null to inherit. Defaults to balsa.level[.name]. */
 		public @Nullable Level levelOrNull(String loggerName) {
 			String value = propertyOrNull(loggerName.isEmpty() ? "balsa.level" : "balsa.level." + loggerName);

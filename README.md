@@ -78,11 +78,18 @@ System.getLogger("app").log(System.Logger.Level.INFO, "Hello {0}", "world");
 Output is UTF-8 LTSV, with a single LF after each record:
 
 ```text
-level:INFO	thread:main	threadId:1	logger:app	message:Hello world
+time:2026-11-10T03:00:00.123Z	level:INFO	thread:main	threadId:1	logger:app	message:Hello world
 ```
 
-The separators above are actual tabs. There is no clock read or timestamp formatting;
-journald or the stdout capture system can timestamp records.
+The separators above are actual tabs. `time` is always UTC ISO-8601 with exactly
+three fractional digits (milliseconds). `BalsaConfig.now()` supplies epoch
+milliseconds and defaults to `System.currentTimeMillis()`. Enabled events read
+it once. Override it to supply another clock; overrides must be thread-safe.
+Failure diagnostics use the system clock, so a failing clock callback can still
+be reported without invoking it again.
+
+With `balsa.journald=true`, records omit `time` and skip the clock callback and
+timestamp formatting. Journald supplies the timestamp.
 
 `threadId` is the current Java thread's numeric ID, including for virtual threads;
 it identifies the virtual thread itself. `thread` contains its name, which can be
@@ -103,7 +110,7 @@ The only built-in properties are:
 | --- | --- |
 | `balsa.level` | Root threshold: ALL, TRACE, DEBUG, INFO, WARN/WARNING, ERROR, OFF. |
 | `balsa.level.com.example` | Threshold inherited by dotted descendants. |
-| `balsa.journald` | `true` adds a syslog priority prefix; default `false`. |
+| `balsa.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
 
 ```sh
 java -Dbalsa.level=WARN -Dbalsa.level.com.example=DEBUG -Dbalsa.journald=true ...
@@ -119,7 +126,7 @@ Failure diagnostics are independent of application thresholds.
 `io.jstach.balsa.spi` is the core module's only exported package. Its sealed
 `BalsaService` interface has two non-sealed nested base classes:
 
-* `BalsaService.BalsaConfig` supplies levels, properties, and optional MDC storage.
+* `BalsaService.BalsaConfig` supplies the clock, levels, properties, and optional MDC storage.
   Register zero or one configuration; the default applies when none is present.
 * `BalsaService.KeyValuesProvider` pushes fields through
   `keyValues(BiConsumer<String, String>)`. Register any number of providers.

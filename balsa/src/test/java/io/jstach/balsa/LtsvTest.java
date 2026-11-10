@@ -9,6 +9,7 @@ import java.text.MessageFormat;
 import org.junit.jupiter.api.Test;
 import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.helpers.MessageFormatter;
 
@@ -44,6 +45,19 @@ class LtsvTest {
 			}
 		}
 		return out.toString();
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "0, 1970-01-01T00:00:00.000Z", "1, 1970-01-01T00:00:00.001Z", "-1, 1969-12-31T23:59:59.999Z",
+			"-1000, 1969-12-31T23:59:59.000Z", "951782400123, 2000-02-29T00:00:00.123Z",
+			"9223372036854775807, +292278994-08-17T07:12:55.807Z",
+			"-9223372036854775808, -292275055-05-16T16:47:04.192Z" })
+	void timeIsUtcWithExactlyMillisecondPrecisionAcrossTheEpochRange(long epochMillis, String expected) {
+		var out = new Ltsv(-1);
+		out.time(epochMillis);
+		assertEquals("""
+				time:%s
+				""".formatted(expected), out.finish());
 	}
 
 	@Test
