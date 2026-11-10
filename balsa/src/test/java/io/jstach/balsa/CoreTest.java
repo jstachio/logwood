@@ -38,9 +38,9 @@ class CoreTest {
 		try (var output = new ObjectOutputStream(bytes)) {
 			output.writeObject(logger);
 		}
-		String before = System.getProperty("balsa.level.serialized");
+		String before = System.getProperty("logging.level.serialized");
 		try {
-			System.setProperty("balsa.level.serialized", "OFF");
+			System.setProperty("logging.level.serialized", "OFF");
 			try (var input = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
 				var restored = (BalsaLog) input.readObject();
 				assertEquals("serialized", restored.getName());
@@ -49,9 +49,9 @@ class CoreTest {
 		}
 		finally {
 			if (before == null)
-				System.clearProperty("balsa.level.serialized");
+				System.clearProperty("logging.level.serialized");
 			else
-				System.setProperty("balsa.level.serialized", before);
+				System.setProperty("logging.level.serialized", before);
 		}
 	}
 

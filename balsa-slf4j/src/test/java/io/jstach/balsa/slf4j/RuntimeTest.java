@@ -153,7 +153,7 @@ class RuntimeTest {
 	@ParameterizedTest
 	@CsvSource({ "false,false", "true,false", "false,true", "true,true" })
 	void clockIsReadOncePerEnabledEventAndSkippedForJournald(boolean modular, boolean journal) throws Exception {
-		var records = run("clock", modular, "balsa.smoke.Smoke$ClockConfig", "balsa.journald=" + journal,
+		var records = run("clock", modular, "balsa.smoke.Smoke$ClockConfig", "logging.journald=" + journal,
 				"test.clock.fail=" + journal, "user.timezone=Pacific/Chatham", "user.language=ar", "user.country=EG");
 		assertEquals(List.of("classic", "fluent", "system"), records.stream().map(r -> r.get("message")).toList());
 		if (journal) {
@@ -207,12 +207,12 @@ class RuntimeTest {
 	@Test
 	void levelInheritanceAllOffAndDisabledEvaluation() throws Exception {
 		assertEquals(List.of(), run("disabled", false, null));
-		var levels = run("levels", false, null, "balsa.level=ALL");
+		var levels = run("levels", false, null, "logging.level=ALL");
 		assertEquals(
 				List.of("TRACE", "DEBUG", "INFO", "WARN", "ERROR", "ALL", "TRACE", "DEBUG", "INFO", "WARN", "ERROR"),
 				levels.stream().map(r -> r.get("level")).toList());
-		assertEquals(List.of(), run("levels", false, null, "balsa.level=OFF"));
-		var records = run("basic", false, null, "balsa.level=ERROR", "balsa.level.sample=WARN");
+		assertEquals(List.of(), run("levels", false, null, "logging.level=OFF"));
+		var records = run("basic", false, null, "logging.level=ERROR", "logging.level.sample=WARN");
 		assertEquals(1, records.size());
 		assertEquals("structured", records.get(0).get("message"));
 	}
@@ -225,9 +225,9 @@ class RuntimeTest {
 			assertEquals(1, records.size());
 			assertEquals("Balsa disabled: invalid configuration", records.get(0).get("message"));
 		}
-		for (String property : List.of("balsa.level=not-a-level", "balsa.journald=not-a-boolean"))
+		for (String property : List.of("logging.level=not-a-level", "logging.journald=not-a-boolean"))
 			assertEquals(1, run("basic", true, null, property).size());
-		var records = run("basic", false, null, "balsa.level.sample=not-a-level");
+		var records = run("basic", false, null, "logging.level.sample=not-a-level");
 		assertEquals(2, records.size());
 		assertEquals("Balsa disabled a logger: invalid level configuration", records.get(0).get("message"));
 		assertEquals("system", records.get(1).get("logger"));
@@ -250,7 +250,7 @@ class RuntimeTest {
 		var records = run("reentrant", modular, null);
 		assertEquals(List.of("outer", "supplier", "object", "event"),
 				records.stream().map(r -> r.get("message")).toList());
-		records = run("basic", modular, null, "balsa.journald=true");
+		records = run("basic", modular, null, "logging.journald=true");
 		assertEquals(List.of("6", "4", "3"), records.stream().map(r -> r.get("priority")).toList());
 	}
 

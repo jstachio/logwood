@@ -10,7 +10,7 @@ java -jar example/target/balsa-example.jar Alice
 ```
 
 `Main` calls both System.Logger and SLF4J. Its BalsaConfig gives `example.*`
-loggers DEBUG by default while honoring explicit per-name properties. Two
+loggers DEBUG by default while honoring explicit `logging.level.<logger>` properties. Two
 KeyValuesProviders demonstrate ordering: defaults at -10 are overlaid by
 application fields at the default order 0. The final fluent log call overlays
 `component` again with `event`.

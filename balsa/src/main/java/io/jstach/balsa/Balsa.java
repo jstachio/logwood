@@ -69,7 +69,7 @@ public final class Balsa {
 			KeyValuesProvider[] values = contributors.toArray(KeyValuesProvider[]::new);
 
 			Level level = selected.levelOrNull("");
-			String prefix = selected.propertyOrNull("balsa.journald");
+			String prefix = selected.propertyOrNull("logging.journald");
 			if (prefix != null && !prefix.equalsIgnoreCase("true") && !prefix.equalsIgnoreCase("false"))
 				throw new IllegalArgumentException("Invalid journald option");
 			config = selected;

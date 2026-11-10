@@ -88,7 +88,7 @@ it once. Override it to supply another clock; overrides must be thread-safe.
 Failure diagnostics use the system clock, so a failing clock callback can still
 be reported without invoking it again.
 
-With `balsa.journald=true`, records omit `time` and skip the clock callback and
+With `logging.journald=true`, records omit `time` and skip the clock callback and
 timestamp formatting. Journald supplies the timestamp.
 
 `threadId` is the current Java thread's numeric ID, including for virtual threads;
@@ -104,16 +104,17 @@ throwable overload writes the `error` field.
 ## Configuration
 
 Defaults: INFO, stdout, no journald prefix, and no stored MDC (all MDC operations default to no-ops).
+Logger level keys match Rainbow Gum, so those settings carry over when upgrading.
 The only built-in properties are:
 
 | Property | Meaning |
 | --- | --- |
-| `balsa.level` | Root threshold: ALL, TRACE, DEBUG, INFO, WARN/WARNING, ERROR, OFF. |
-| `balsa.level.com.example` | Threshold inherited by dotted descendants. |
-| `balsa.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
+| `logging.level` | Root threshold: ALL, TRACE, DEBUG, INFO, WARN/WARNING, ERROR, OFF. |
+| `logging.level.com.example` | Threshold inherited by dotted descendants. |
+| `logging.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
 
 ```sh
-java -Dbalsa.level=WARN -Dbalsa.level.com.example=DEBUG -Dbalsa.journald=true ...
+java -Dlogging.level=WARN -Dlogging.level.com.example=DEBUG -Dlogging.journald=true ...
 ```
 
 Levels resolve at first use of each logger and then stay fixed. Journal prefixes

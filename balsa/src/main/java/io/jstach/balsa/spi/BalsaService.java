@@ -35,9 +35,9 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 			return System.currentTimeMillis();
 		}
 
-		/** Returns a threshold, or null to inherit. Defaults to balsa.level[.name]. */
+		/** Returns a threshold, or null to inherit. Defaults to logging.level[.name]. */
 		public @Nullable Level levelOrNull(String loggerName) {
-			String value = propertyOrNull(loggerName.isEmpty() ? "balsa.level" : "balsa.level." + loggerName);
+			String value = propertyOrNull(loggerName.isEmpty() ? "logging.level" : "logging.level." + loggerName);
 			if (value == null)
 				return null;
 			if (value.length() > 16)
@@ -55,7 +55,10 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 			return null;
 		}
 
-		/** Reads balsa.level, balsa.level.name, and balsa.journald; null means absent. */
+		/**
+		 * Reads logging.level, logging.level.name, and logging.journald; null means
+		 * absent.
+		 */
 		public @Nullable String propertyOrNull(String key) {
 			return System.getProperty(key);
 		}
