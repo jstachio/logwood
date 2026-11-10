@@ -92,6 +92,17 @@ and the optional `truncated` flag is a boolean; other values, including context
 and rendered objects, are strings. No object serialization or JSON runtime
 dependency is added. Both formats share the same bounds and defensive escaping.
 
+The following shows literal text written inside values:
+
+| Input | LTSV | JSONL |
+| --- | --- | --- |
+| Double quote | `"` | `\"` |
+| Backslash | `\\` | `\\` |
+| Newline | `\n` | `\n` |
+| ESC | `\u001b` | `\u001b` |
+| C1 CSI | `\u009b` | `\u009b` |
+| Bidi override | `\u202e` | `\u202e` |
+
 The [LTSV encoding reference](doc/ltsv.md) specifies value escapes, percent-encoded
 labels, malformed UTF-16 handling, decoding order, and truncation. All input ESC
 characters are escaped, including SGR sequences that could conceal log text.
