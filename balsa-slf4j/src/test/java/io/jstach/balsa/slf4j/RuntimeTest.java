@@ -83,7 +83,7 @@ class RuntimeTest {
 						type + " initialized during System.Logger use");
 		}
 		String data = Files.readString(stdout);
-		lastOutput = data;
+		lastOutput = stableThreadIds(data);
 		assertFalse(data.contains("secret=do-not-print"));
 		assertFalse(data.contains("\r"));
 		List<Map<String, String>> records = new ArrayList<>();
@@ -104,6 +104,11 @@ class RuntimeTest {
 			records.add(fields);
 		}
 		return records;
+	}
+
+	private static String stableThreadIds(String output) {
+		// Keep numeric IDs in parsed records; normalize only golden text expectations.
+		return output.replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t");
 	}
 
 	private static String decode(String input) {
@@ -284,8 +289,8 @@ class RuntimeTest {
 			assertEquals("direct", records.getFirst().get("kv.source"));
 		if (provider.equals("default"))
 			assertEquals("""
-					level:INFO\tthread:main\tthreadId:1\tlogger:system\tmessage:system only
-					level:WARN\tthread:main\tthreadId:1\tlogger:system\tmessage:argument value
+					level:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
+					level:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value
 					""", lastOutput);
 	}
 
@@ -417,9 +422,9 @@ class RuntimeTest {
 			assertTrue(child.waitFor(30, TimeUnit.SECONDS));
 			assertEquals(0, child.exitValue(), Files.readString(diagnostics));
 			assertEquals("""
-					level:INFO\tthread:main\tthreadId:1\tlogger:app\tmessage:SLF4J module discovery
-					level:INFO\tthread:main\tthreadId:1\tlogger:app\tmessage:System.Logger module discovery
-					""", Files.readString(diagnostics));
+					level:INFO\tthread:main\tthreadId:<id>\tlogger:app\tmessage:SLF4J module discovery
+					level:INFO\tthread:main\tthreadId:<id>\tlogger:app\tmessage:System.Logger module discovery
+					""", stableThreadIds(Files.readString(diagnostics)));
 		}
 		finally {
 			child.destroyForcibly();
