@@ -8,6 +8,7 @@
   <modules>
     <module>balsa</module>
     <module>balsa-slf4j</module>
+    <module>example</module>
     <module>bench</module>
   </modules>
   <description>A small, defensive LTSV backend for SLF4J and System.Logger.</description>

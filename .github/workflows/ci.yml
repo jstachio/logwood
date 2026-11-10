@@ -15,4 +15,12 @@ jobs:
           distribution: temurin
           java-version: '${{ matrix.java }}'
           cache: maven
-      - run: ./mvnw --batch-mode clean verify javadoc:javadoc
+      - run: ./mvnw --batch-mode clean install javadoc:javadoc
+      - run: java -jar example/target/balsa-example.jar
+      - name: Verify example is excluded from deployment
+        run: |
+          example_repo="${RUNNER_TEMP}/balsa-example-deploy"
+          ./mvnw --batch-mode -pl example deploy \
+            -Dmaven.deploy.skip=false \
+            "-DaltDeploymentRepository=example-check::file://${example_repo}"
+          test ! -e "${example_repo}/io/jstach/balsa/balsa-example"

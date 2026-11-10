@@ -11,7 +11,8 @@ shutdown hooks, caller lookup, or packaging-data lookup.
 ## Build and use
 
 This is a Maven reactor: `balsa/` builds the runtime artifact, `balsa-slf4j/`
-adds SLF4J module-path registration, and `bench/` builds its isolated JMH harness.
+adds SLF4J module-path registration, `example/` builds a runnable application,
+and `bench/` builds its isolated JMH harness.
 The root `balsa-parent` POM shares dependency versions,
 Java 21 compiler settings, Spring formatting validation, and build plugins.
 The runtime coordinates remain `io.jstach.balsa:balsa`.
@@ -28,6 +29,15 @@ The runtime coordinates remain `io.jstach.balsa:balsa`.
   <artifactId>balsa</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
+```
+
+The [example](example/README.md) is built and formatted with the reactor but
+excluded from Maven deployment. Run it with dependencies from your local Maven
+repository:
+
+```sh
+./mvnw -pl example -am install
+java -jar example/target/balsa-example.jar
 ```
 
 For just the runtime, use `./mvnw -pl balsa -am clean verify`.
