@@ -176,7 +176,28 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	}
 
 	private static boolean escaped(char c) {
-		return c < ' ' || c >= 0x7f && (c <= 0x9f || c == '\u2028' || c == '\u2029' || format(c));
+		return c < ' ' || c >= 0x7f && Escapes.contains(c);
+	}
+
+	// Cache BMP classification on first use; printable ASCII never initializes this.
+	// Surrogate pairs still use format(int), and lone surrogates are handled by text.
+	private static final class Escapes {
+
+		private static final long[] BITS = bits();
+
+		private static long[] bits() {
+			long[] bits = new long[(Character.MAX_VALUE + 1) >>> 6];
+			for (int c = 0x7f; c <= Character.MAX_VALUE; c++) {
+				if (c <= 0x9f || c == 0x2028 || c == 0x2029 || format(c))
+					bits[c >>> 6] |= 1L << (c & 63);
+			}
+			return bits;
+		}
+
+		static boolean contains(char c) {
+			return (BITS[c >>> 6] & (1L << (c & 63))) != 0;
+		}
+
 	}
 
 	private static boolean format(int c) {

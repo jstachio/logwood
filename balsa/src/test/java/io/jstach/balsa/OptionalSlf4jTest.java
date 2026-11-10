@@ -58,7 +58,7 @@ class OptionalSlf4jTest {
 		for (String property : properties)
 			command.add("-D" + property);
 		Path trace = folder.resolve("load.log");
-		command.add("-Xlog:class+load=info:file=" + trace);
+		command.add("-Xlog:class+load=info,class+init=info:file=" + trace);
 		if (modular) {
 			String modules = jar().toString();
 			if (observableApi) {
@@ -77,6 +77,9 @@ class OptionalSlf4jTest {
 		assertTrue(loaded.contains("io.jstach.balsa.BalsaSystemLogger"));
 		assertFalse(loaded.contains("org.slf4j."));
 		assertFalse(loaded.contains("io.jstach.balsa.spi.BalsaProvider"));
+		if (scenario.equals("basic") || scenario.equals("unicode"))
+			assertEquals(scenario.equals("unicode"),
+					loaded.contains("Initializing 'io/jstach/balsa/RecordEncoder$Escapes'"));
 		return output;
 	}
 
@@ -119,6 +122,17 @@ class OptionalSlf4jTest {
 		assertEquals("WARN", second.get("level"));
 		assertTrue(first.get("threadId") instanceof Long);
 		java.time.Instant.parse((String) first.get("time"));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,ltsv", "true,ltsv", "false,jsonl", "true,jsonl" })
+	void unicodeInitializesTheEscapeTableWithoutLoadingSlf4j(boolean modular, String format) throws Exception {
+		String output = run(modular, false, null, "unicode", "logging.format=" + format);
+		assertTrue(output.contains("日本語😀\\u202e\\u009b"));
+		if (format.equals("jsonl"))
+			assertEquals("日本語😀\u202e\u009b", JsonlTest.parse(output).get("message"));
+		else
+			assertTrue(output.endsWith("message:日本語😀\\u202e\\u009b\n"));
 	}
 
 	@ParameterizedTest

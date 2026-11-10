@@ -43,6 +43,7 @@ code units, not UTF-8 bytes.
 
 | Resource | Limit |
 | --- | --- |
+| Escape classification bitmap | 8,192 bytes plus array header per class loader, initialized lazily |
 | Complete record, including truncation marker and LF | 16,384 units |
 | Encoded value | 4,096 units |
 | Custom key (namespace separate) | 256 raw units; LTSV also limits its encoded label to 256 |

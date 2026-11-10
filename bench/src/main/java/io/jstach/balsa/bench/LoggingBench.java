@@ -66,6 +66,16 @@ public class LoggingBench {
 	}
 
 	@Benchmark
+	public void balsaUnicode() {
+		Objects.requireNonNull(balsa).info("日本語のログメッセージです。リクエストの処理が正常に完了しました。ユーザーの設定と実行結果を記録しています。");
+	}
+
+	@Benchmark
+	public void simpleUnicode() {
+		Objects.requireNonNull(simple).info("日本語のログメッセージです。リクエストの処理が正常に完了しました。ユーザーの設定と実行結果を記録しています。");
+	}
+
+	@Benchmark
 	public void balsaArgument() {
 		Objects.requireNonNull(balsa).info("value {}", argument);
 	}

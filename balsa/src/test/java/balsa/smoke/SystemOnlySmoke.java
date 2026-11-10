@@ -44,6 +44,10 @@ public final class SystemOnlySmoke {
 		BalsaConfig.MDCAdapter.class.getMethods();
 		var logger = System.getLogger("system");
 		logger.getClass().getDeclaredMethods();
+		if (args[0].equals("unicode")) {
+			logger.log(Level.INFO, "日本語😀\u202e\u009b");
+			return;
+		}
 		if (args[0].equals("services")) {
 			logger.log(Level.INFO, "services");
 			logger.log(Level.INFO, "services");

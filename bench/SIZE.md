@@ -7,12 +7,13 @@ normal descriptors and resources. This comparison measures size, not speed.
 
 | Implementation | Provider JARs | Required runtime JARs, excluding SLF4J API |
 | --- | ---: | ---: |
-| Balsa core + SLF4J module | 24,284 bytes (23.71 KiB) | 28,103 bytes (27.44 KiB) |
+| Balsa core + SLF4J module | 24,957 bytes (24.37 KiB) | 28,776 bytes (28.10 KiB) |
 | Avaje Simple JSON Logger 2.0 | 49,832 bytes (48.66 KiB) | 180,520 bytes (176.29 KiB) |
 | Avaje Simple Logger 2.0 | 55,869 bytes (54.56 KiB) | 285,416 bytes (278.73 KiB) |
 
-Balsa includes both LTSV and JSONL. Its provider total is the core plus the
-SLF4J module, even though classpath applications can use the core directly.
+Balsa includes both LTSV and JSONL. Its lazy 8 KiB escape-classification bitmap
+is generated at runtime and is not stored in the JAR. Its provider total is the
+core plus the SLF4J module, even though classpath applications can use the core directly.
 Its runtime total includes JSpecify 1.0.0 (3,819 bytes), which Maven brings in
 by default; the static JPMS requirement allows it to be omitted at runtime.
 

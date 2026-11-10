@@ -249,7 +249,7 @@ and closing delimiters.
 Balsa retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
 
-The core has ten types plus package and module descriptors; optional JPMS SLF4J
+The core has eleven types plus package and module descriptors; optional JPMS SLF4J
 registration adds one class and its descriptor. Runtime jars omit
 compiler debugging tables, Maven descriptors, and build-environment manifest fields. To build with source/line
 information for debugging:
@@ -257,6 +257,10 @@ information for debugging:
 ```sh
 ./mvnw clean package -Dmaven.compiler.debuglevel=lines,source
 ```
+
+Both encoders share a lazy 8 KiB bitmap for Unicode escape classification.
+Printable ASCII text bypasses the table; surrogate pairs retain their separate
+code point checks. The table is generated at runtime rather than embedded in the JAR.
 
 ## Nullability
 

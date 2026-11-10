@@ -25,3 +25,5 @@ confidence intervals and allocation rates. File/terminal throughput and
 application performance need separate measurements.
 
 See [RESULTS.md](RESULTS.md) for the measured artifact and run details.
+The [escape lookup comparison](ESCAPING.md) measures the current encoder's lazy
+classification table with ASCII and Japanese messages in both LTSV and JSONL.

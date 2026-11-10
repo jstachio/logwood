@@ -14,9 +14,9 @@
     "io.jstach.balsa:balsa:0.1.0-SNAPSHOT": {
       "coordinate": "io.jstach.balsa:balsa:0.1.0-SNAPSHOT",
       "jar": "balsa-0.1.0-SNAPSHOT.jar",
-      "bytes": 22050,
-      "classFiles": 13,
-      "sha256": "33737b600e5c9c8bf7127f4083664d2147eaf4d72b09d8f89ab430e800fcc878"
+      "bytes": 22723,
+      "classFiles": 14,
+      "sha256": "ac3d444c54c1efab6a9038f4c2b90136e48c474aa67460d4fda0cc73de546ebe"
     },
     "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT": {
       "coordinate": "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT",
@@ -77,7 +77,7 @@
   },
   "runtimeSets": {
     "Balsa": {
-      "bytes": 28103,
+      "bytes": 28776,
       "artifacts": [
         "io.jstach.balsa:balsa:0.1.0-SNAPSHOT",
         "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT",
