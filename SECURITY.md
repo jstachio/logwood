@@ -23,6 +23,12 @@ escaping; keys are skipped as a whole when they cannot fit. Context and fluent
 fields are namespaced away from metadata in both formats.
 Marker arguments and event marker accessors are ignored.
 
+The [LTSV encoding reference](doc/ltsv.md) defines the exact character ranges,
+escape spellings, label extensions, and decoding order. All input ESC characters
+are escaped, including SGR conceal sequences. Balsa emits no formatter-owned
+ANSI sequences. Escape decoding belongs after record/field splitting and must
+run once; decoding recursively can turn literal escape text back into controls.
+
 Each finished record is encoded as UTF-8 and submitted in one
 `System.out.writeBytes(byte[])` call. The standard PrintStream serializes that
 call. Replacing System.out with a differently encoded PrintStream does not

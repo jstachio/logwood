@@ -92,6 +92,10 @@ and the optional `truncated` flag is a boolean; other values, including context
 and rendered objects, are strings. No object serialization or JSON runtime
 dependency is added. Both formats share the same bounds and defensive escaping.
 
+The [LTSV encoding reference](doc/ltsv.md) specifies value escapes, percent-encoded
+labels, malformed UTF-16 handling, decoding order, and truncation. All input ESC
+characters are escaped, including SGR sequences that could conceal log text.
+
 The separators above are actual tabs. `time` is always UTC ISO-8601 with exactly
 three fractional digits (milliseconds). `BalsaConfig.now()` supplies epoch
 milliseconds and defaults to `System.currentTimeMillis()`. Enabled events read
@@ -204,9 +208,11 @@ run synchronously and must not retain their consumer. All providers share the
 32-key context budget. Context and fluent fields share `kv.` labels; fluent
 fields have final precedence, the last event value wins, and each label is emitted
 once. A bounded temporary map is created only when fields exist. Balsa retains
-no context map between records. Built-in metadata remains separate. Labels use
-injective percent-encoded UTF-8 in LTSV, including literal percent signs and malformed
-UTF-16. JSON keeps the original keys after `kv.` and escapes JSON member names.
+no context map between records. Built-in metadata remains separate. LTSV labels
+use percent-encoded UTF-8, a `%` sentinel for the empty key, and a `%uXXXX`
+extension for unpaired UTF-16 surrogates. Literal percent signs become `%25`,
+keeping these forms distinct. JSON keeps the original keys after `kv.` and
+escapes JSON member names.
 
 Balsa's System.Logger path loads no SLF4J classes and never calls
 `BalsaConfig.createMDCAdapter()`. The adapter is a JDK-only storage contract
