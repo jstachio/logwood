@@ -13,10 +13,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.helpers.MessageFormatter;
 
-class LtsvTest {
+class RecordEncoderTest {
 
 	private static String value(String input) {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.text(input);
 		String record = out.finish();
@@ -53,7 +53,7 @@ class LtsvTest {
 			"9223372036854775807, +292278994-08-17T07:12:55.807Z",
 			"-9223372036854775808, -292275055-05-16T16:47:04.192Z" })
 	void timeIsUtcWithExactlyMillisecondPrecisionAcrossTheEpochRange(long epochMillis, String expected) {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.time(epochMillis);
 		assertEquals("""
 				time:%s
@@ -80,7 +80,7 @@ class LtsvTest {
 	@ParameterizedTest
 	@ValueSource(strings = { "text", "message", "system", "object", "scalar" })
 	void nullableDataInputsAreRenderedSafely(String kind) {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("message");
 		switch (kind) {
 			case "text" -> out.text(null);
@@ -97,7 +97,7 @@ class LtsvTest {
 
 	@Test
 	void nullArgumentElementsAndContextValuesKeepTheirMeaning() {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("slf4j");
 		out.message("value {}", new Object[] { null }, 1);
 		out.start("system");
@@ -129,7 +129,7 @@ class LtsvTest {
 			}
 		};
 		error.setStackTrace(new StackTraceElement[0]);
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("error");
 		out.throwable(error);
 		String record = out.finish();
@@ -142,7 +142,7 @@ class LtsvTest {
 	void keysAreInjectiveAndCannotCreateFields() {
 		var labels = new HashSet<String>();
 		for (int i = 0; i <= 0xffff; i++) {
-			var out = new Ltsv(-1);
+			var out = new RecordEncoder(-1, false);
 			out.extra("mdc.", String.valueOf((char) i), "v");
 			String record = out.finish();
 			assertEquals(1, record.chars().filter(c -> c == ':').count());
@@ -151,7 +151,7 @@ class LtsvTest {
 			assertTrue(label.matches("[a-zA-Z0-9_.%\\-]+"));
 			assertTrue(labels.add(label), "Key collision " + i);
 		}
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.extra("mdc.", "", "");
 		assertTrue(labels.add(out.finish().split(":", 2)[0]));
 	}
@@ -167,7 +167,7 @@ class LtsvTest {
 	@Test
 	void literalEscapesRemainDistinctAndSeparatorsAreAlwaysPresent() {
 		assertNotEquals(value("\n"), value("\\n"));
-		var out = new Ltsv(6);
+		var out = new RecordEncoder(6, false);
 		out.start("a");
 		out.text(">");
 		out.start("b");
@@ -180,7 +180,7 @@ class LtsvTest {
 			"Set {1,2,3} {}", "{}\\{}{}" })
 	void slf4jSubstitutionMatchesItsReferenceFormatter(String pattern) {
 		Object[] args = { "A", new int[] { 1, 2 }, "C" };
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.message(pattern, args, args.length);
 		assertEquals(MessageFormatter.basicArrayFormat(pattern, args),
@@ -192,7 +192,7 @@ class LtsvTest {
 			"{0,choice,0#none|1#one|1<many {1}}", "{4}" })
 	void systemFormattingMatchesMessageFormatWithinSafetyLimits(String pattern) {
 		Object[] args = { 2, "world" };
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.system(pattern, args);
 		assertEquals(MessageFormat.format(pattern, args), decode(out.finish().substring(2).stripTrailing()), pattern);
@@ -200,7 +200,7 @@ class LtsvTest {
 
 	@Test
 	void systemFormattingLeavesUnindexedQuotesAlone() {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.system("don't touch quotes", new Object[] { 2, "world" });
 		assertEquals("m:don't touch quotes\n", out.finish());
@@ -212,7 +212,7 @@ class LtsvTest {
 				first\tfield
 				second\rline\u001b[8m
 				""";
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("message");
 		out.text(input);
 		assertEquals("""
@@ -231,7 +231,7 @@ class LtsvTest {
 					consumer.accept("key" + i, "value");
 			}
 		};
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.keyValues(config);
 		retained.get().accept("late", "ignored");
 		out.writeKeyValues();
@@ -244,7 +244,7 @@ class LtsvTest {
 
 	@Test
 	void eventValuesOverrideContextAndDuplicateEventKeysWithoutRenderingDiscardedObjects() {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.keyValues(new KeyValuesProvider() {
 			@Override
 			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
@@ -267,7 +267,7 @@ class LtsvTest {
 
 	@Test
 	void mergedContextAndEventFieldsHaveFixedBudgetsAndIgnoreInvalidKeyValues() {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.keyValues(new KeyValuesProvider() {
 			@Override
 			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
@@ -297,7 +297,7 @@ class LtsvTest {
 
 	@Test
 	void multipleProvidersShareTheContextBudgetWhileAllowingOverrides() {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.keyValues(new KeyValuesProvider() {
 			@Override
 			public void keyValues(java.util.function.BiConsumer<@Nullable String, @Nullable String> consumer) {
@@ -323,15 +323,15 @@ class LtsvTest {
 	@Test
 	void limitsBoundDenseInputArrayCyclesAndThrowableCycles() {
 		assertTimeout(Duration.ofSeconds(2), () -> {
-			var out = new Ltsv(-1);
+			var out = new RecordEncoder(-1, false);
 			out.start("m");
 			out.text("\u001b".repeat(1_000_000));
 			String record = out.finish();
-			assertTrue(record.length() <= Ltsv.RECORD);
+			assertTrue(record.length() <= RecordEncoder.RECORD);
 			assertTrue(record.endsWith("\ttruncated:true\n"));
 			Object[] array = new Object[1];
 			array[0] = array;
-			out = new Ltsv(-1);
+			out = new RecordEncoder(-1, false);
 			out.start("m");
 			out.object(array, 0);
 			assertTrue(out.finish().contains("truncated:true"));
@@ -341,18 +341,18 @@ class LtsvTest {
 			b.initCause(a);
 			a.addSuppressed(b);
 			b.addSuppressed(a);
-			out = new Ltsv(-1);
+			out = new RecordEncoder(-1, false);
 			out.start("error");
 			out.throwable(a);
 			record = out.finish();
-			assertTrue(record.length() <= Ltsv.RECORD);
+			assertTrue(record.length() <= RecordEncoder.RECORD);
 			assertTrue(record.endsWith("\ttruncated:true\n"));
 		});
 	}
 
 	@Test
 	void hostileValuesAndOversizedFormatIndicesAreContained() {
-		var out = new Ltsv(-1);
+		var out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.object(new Object() {
 			@Override
@@ -361,16 +361,16 @@ class LtsvTest {
 			}
 		}, 0);
 		assertEquals("m:[toString failed]\n", out.finish());
-		out = new Ltsv(-1);
+		out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.system("{2147483647}", new Object[] { 1 });
 		assertTrue(out.finish().endsWith(" [format rejected]\ttruncated:true\n"));
-		out = new Ltsv(-1);
+		out = new RecordEncoder(-1, false);
 		for (int i = 0; i < 1000; i++) {
 			out.start("x" + i);
 			out.text("x".repeat(4096));
 		}
-		assertTrue(out.finish().length() <= Ltsv.RECORD);
+		assertTrue(out.finish().length() <= RecordEncoder.RECORD);
 	}
 
 }

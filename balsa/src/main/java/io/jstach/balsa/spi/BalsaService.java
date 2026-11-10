@@ -56,8 +56,8 @@ public sealed interface BalsaService permits BalsaService.BalsaConfig, BalsaServ
 		}
 
 		/**
-		 * Reads logging.level, logging.level.name, and logging.journald; null means
-		 * absent.
+		 * Reads logging.level, logging.level.name, logging.journald, and logging.format;
+		 * null means absent.
 		 */
 		public @Nullable String propertyOrNull(String key) {
 			return System.getProperty(key);

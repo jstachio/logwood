@@ -44,7 +44,8 @@ class OptionalSlf4jTest {
 			.of(org.jspecify.annotations.Nullable.class.getProtectionDomain().getCodeSource().getLocation().toURI());
 	}
 
-	private String run(boolean modular, boolean observableApi, String provider, String scenario) throws Exception {
+	private String run(boolean modular, boolean observableApi, String provider, String scenario, String... properties)
+			throws Exception {
 		Path folder = Files.createTempDirectory(temp, "child-");
 		if (provider != null) {
 			Path descriptor = folder.resolve("META-INF/services/io.jstach.balsa.spi.BalsaService");
@@ -54,6 +55,8 @@ class OptionalSlf4jTest {
 		String tests = Path.of("target/test-classes").toAbsolutePath().toString();
 		var command = new ArrayList<String>();
 		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		for (String property : properties)
+			command.add("-D" + property);
 		Path trace = folder.resolve("load.log");
 		command.add("-Xlog:class+load=info:file=" + trace);
 		if (modular) {
@@ -101,6 +104,21 @@ class OptionalSlf4jTest {
 				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
 				time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value
 				""", run(modular, observableApi, null, "basic"));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,false", "true,false", "true,true" })
+	void jsonLinesWorkWithoutSlf4jOrAJsonLibraryAtRuntime(boolean modular, boolean observableApi) throws Exception {
+		String output = run(modular, observableApi, null, "basic", "logging.format=jsonl");
+		var lines = output.lines().toList();
+		assertEquals(2, lines.size());
+		var first = JsonlTest.parse(lines.getFirst());
+		var second = JsonlTest.parse(lines.get(1));
+		assertEquals("system only", first.get("message"));
+		assertEquals("argument value", second.get("message"));
+		assertEquals("WARN", second.get("level"));
+		assertTrue(first.get("threadId") instanceof Long);
+		java.time.Instant.parse((String) first.get("time"));
 	}
 
 	@ParameterizedTest

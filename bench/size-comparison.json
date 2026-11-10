@@ -1,0 +1,107 @@
+{
+  "date": "2026-11-10",
+  "balsaBuild": "Amazon Corretto 21.0.13, --release 21, debug:none; normal Maven JARs",
+  "runtimeExcludes": [
+    "slf4j-api",
+    "test dependencies",
+    "provided dependencies",
+    "unselected optional dependencies",
+    "example",
+    "benchmark",
+    "experimental scoped module"
+  ],
+  "artifacts": {
+    "io.jstach.balsa:balsa:0.1.0-SNAPSHOT": {
+      "coordinate": "io.jstach.balsa:balsa:0.1.0-SNAPSHOT",
+      "jar": "balsa-0.1.0-SNAPSHOT.jar",
+      "bytes": 22050,
+      "classFiles": 13,
+      "sha256": "33737b600e5c9c8bf7127f4083664d2147eaf4d72b09d8f89ab430e800fcc878"
+    },
+    "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT": {
+      "coordinate": "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT",
+      "jar": "balsa-slf4j-0.1.0-SNAPSHOT.jar",
+      "bytes": 2234,
+      "classFiles": 3,
+      "sha256": "f10e82e018cd18f358ba72ce25faa6ed73f4d15c541f869b028fee01b9f31068"
+    },
+    "org.jspecify:jspecify:1.0.0": {
+      "coordinate": "org.jspecify:jspecify:1.0.0",
+      "jar": "jspecify-1.0.0.jar",
+      "bytes": 3819,
+      "classFiles": 5,
+      "sha256": "1fad6e6be7557781e4d33729d49ae1cdc8fdda6fe477bb0cc68ce351eafdfbab"
+    },
+    "io.avaje:avaje-json-core:3.13": {
+      "coordinate": "io.avaje:avaje-json-core:3.13",
+      "jar": "avaje-json-core-3.13.jar",
+      "bytes": 130688,
+      "classFiles": 95,
+      "sha256": "a192c4e2704bbf5ae0d4abdd6fb5efe223528fcb8cb374b0166d4a0efab0cffb"
+    },
+    "io.avaje:avaje-simple-json-logger:2.0": {
+      "coordinate": "io.avaje:avaje-simple-json-logger:2.0",
+      "jar": "avaje-simple-json-logger-2.0.jar",
+      "bytes": 49832,
+      "classFiles": 35,
+      "sha256": "69e2f30bcc2ef873326d9a4956658afed76030d366cc7e0693e533ee1446f175"
+    },
+    "io.avaje:avaje-applog:1.2": {
+      "coordinate": "io.avaje:avaje-applog:1.2",
+      "jar": "avaje-applog-1.2.jar",
+      "bytes": 3754,
+      "classFiles": 5,
+      "sha256": "d1aa0ba97c77ee4428e3feb23d62231cfd00e2771b3fe4b79e7393f854273353"
+    },
+    "io.avaje:avaje-applog-slf4j:1.2": {
+      "coordinate": "io.avaje:avaje-applog-slf4j:1.2",
+      "jar": "avaje-applog-slf4j-1.2.jar",
+      "bytes": 7320,
+      "classFiles": 6,
+      "sha256": "38418c5215a973f2564f9f311020ac7c02a30669f6082ff5f0201bbe70e38fe0"
+    },
+    "io.avaje:avaje-config:5.1": {
+      "coordinate": "io.avaje:avaje-config:5.1",
+      "jar": "avaje-config-5.1.jar",
+      "bytes": 83966,
+      "classFiles": 55,
+      "sha256": "6b0d0479051f31fb14b11f7b663f8370dc46a595be53b409664ceffc8740742f"
+    },
+    "io.avaje:avaje-simple-logger:2.0": {
+      "coordinate": "io.avaje:avaje-simple-logger:2.0",
+      "jar": "avaje-simple-logger-2.0.jar",
+      "bytes": 6037,
+      "classFiles": 3,
+      "sha256": "3097d0bfd8cde56086aba0bcf876b2435c1887a2d1262335021272e066570235"
+    }
+  },
+  "runtimeSets": {
+    "Balsa": {
+      "bytes": 28103,
+      "artifacts": [
+        "io.jstach.balsa:balsa:0.1.0-SNAPSHOT",
+        "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT",
+        "org.jspecify:jspecify:1.0.0"
+      ]
+    },
+    "avaje-simple-json-logger": {
+      "bytes": 180520,
+      "artifacts": [
+        "io.avaje:avaje-json-core:3.13",
+        "io.avaje:avaje-simple-json-logger:2.0"
+      ]
+    },
+    "avaje-simple-logger": {
+      "bytes": 285416,
+      "artifacts": [
+        "io.avaje:avaje-applog:1.2",
+        "io.avaje:avaje-applog-slf4j:1.2",
+        "io.avaje:avaje-config:5.1",
+        "io.avaje:avaje-json-core:3.13",
+        "io.avaje:avaje-simple-json-logger:2.0",
+        "io.avaje:avaje-simple-logger:2.0",
+        "org.jspecify:jspecify:1.0.0"
+      ]
+    }
+  }
+}

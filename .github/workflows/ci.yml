@@ -17,6 +17,7 @@ jobs:
           cache: maven
       - run: ./mvnw --batch-mode clean install javadoc:javadoc
       - run: java -jar example/target/balsa-example.jar
+      - run: java -Dlogging.format=jsonl -jar example/target/balsa-example.jar
       - name: Verify example is excluded from deployment
         run: |
           example_repo="${RUNNER_TEMP}/balsa-example-deploy"

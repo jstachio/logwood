@@ -17,14 +17,16 @@ visual confusables remain application data.
 
 A value containing an actual newline differs from a literal backslash followed
 by `n`. Escapes and surrogate pairs are emitted atomically, including at limits.
-Labels encode forbidden characters, percent signs, and malformed surrogates
-without collisions. Context and fluent fields are namespaced away from metadata.
+LTSV labels encode forbidden characters, percent signs, and malformed surrogates
+without collisions. JSON member names preserve the original key text using JSON
+escaping; keys are skipped as a whole when they cannot fit. Context and fluent
+fields are namespaced away from metadata in both formats.
 Marker arguments and event marker accessors are ignored.
 
 Each finished record is encoded as UTF-8 and submitted in one
 `System.out.writeBytes(byte[])` call. The standard PrintStream serializes that
 call. Replacing System.out with a differently encoded PrintStream does not
-change the LTSV encoding. Balsa never closes or caches stdout;
+change the UTF-8 encoding. Balsa never closes or caches stdout;
 replacing System.out takes effect for later records. It does not coordinate
 unrelated writers or sandbox an application-supplied PrintStream.
 
@@ -37,7 +39,7 @@ code units, not UTF-8 bytes.
 | --- | --- |
 | Complete record, including truncation marker and LF | 16,384 units |
 | Encoded value | 4,096 units |
-| Encoded custom key (namespace separate) | 256 units, otherwise the field is skipped |
+| Custom key (namespace separate) | 256 raw units; LTSV also limits its encoded label to 256 |
 | Context providers / fluent fields | 32 distinct keys across all providers / 32 event pairs, at most 64 merged keys |
 | Array nesting / elements per array | 8 / 32 |
 | Throwable graph / total stack frames | 8 throwables / 64 frames |
@@ -47,7 +49,9 @@ code units, not UTF-8 bytes.
 | MessageFormat argument index / format elements / brace depth | 31 / 64 / 8 |
 | Logger name / hierarchy depth | 1,024 units / 64 |
 
-Clipping emits `truncated:true`. Saturation does not switch to an unescaped
+Clipping emits `truncated:true` in LTSV or `"truncated":true` in JSONL. JSON
+strings close after complete escapes and surrogate pairs; member names and numeric
+fields are never partially emitted. Saturation does not switch to an unescaped
 fallback. Unsafe formatting patterns produce an escaped rejection marker.
 System.Logger arguments are bounded before MessageFormat expansion. Large
 numeric values are not expanded without bounds. No input-sized formatter or
@@ -60,12 +64,15 @@ before hashing or retaining keys in that map.
 
 ## Failures and reentry
 
-Invalid root configuration, invalid journald settings, or
+Invalid root configuration, invalid journald or format settings, or
 multiple configuration providers or invalid service constructors/order methods disable logging instead of falling back to
 another backend. An MDC factory failure disables logging when SLF4J initializes;
 System.Logger alone never requests that adapter. Bad per-name configuration disables that logger. One fixed
-LTSV diagnostic reports the failure without printing property values, provider
+diagnostic reports the failure without printing property values, provider
 exception messages, or their stack traces.
+Diagnostics use the selected format once it is validated; an invalid format itself
+uses LTSV. JSONL adds no runtime JSON library. Tests use an independent parser to
+check syntax, duplicate names, escaping, and saturation.
 
 Nonfatal callback failures are contained. An event whose metadata cannot safely
 be read may be dropped, with one fixed diagnostic. Nested calls during formatting are

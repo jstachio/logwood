@@ -16,7 +16,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
 
-final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
+final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable String> {
 
 	static final int RECORD = 16_384, VALUE = 4096, KEY = 256;
 
@@ -29,6 +29,10 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 
 	private final StringBuilder out = new StringBuilder(128);
 
+	private final boolean json;
+
+	private boolean quoted;
+
 	private int end, frames, throwables, fields;
 
 	private @Nullable Map<String, @Nullable Object> keyValues;
@@ -37,9 +41,12 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 
 	boolean truncated;
 
-	Ltsv(int priority) {
+	RecordEncoder(int priority, boolean json) {
+		this.json = json;
 		if (priority >= 0)
 			out.append('<').append(priority).append('>');
+		if (json)
+			out.append('{');
 	}
 
 	boolean room() {
@@ -47,15 +54,47 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 	}
 
 	void start(String label) {
-		if (out.length() + label.length() + 2 > CONTENT) {
+		start(label, true, 0);
+	}
+
+	private boolean start(String label, boolean string, int reserve) {
+		int before = out.length();
+		if ((long) before + label.length() + (json ? 6 : 2) + reserve > CONTENT) {
 			truncated = true;
 			end = out.length();
-			return;
+			return false;
 		}
-		if (fields++ != 0)
-			out.append('\t');
-		out.append(label).append(':');
+		if (json) {
+			if (quoted)
+				out.append('"');
+			if (fields != 0)
+				out.append(',');
+			out.append('"');
+			end = CONTENT - 3 - reserve;
+			if (!text(label, 0, label.length())) {
+				// A member name must be complete; clipping it could merge distinct keys.
+				out.setLength(before);
+				end = before;
+				return false;
+			}
+			out.append("\":");
+			if (string)
+				out.append('"');
+			quoted = string;
+		}
+		else {
+			if (fields != 0)
+				out.append('\t');
+			out.append(label).append(':');
+		}
+		fields++;
 		end = Math.min(CONTENT, out.length() + VALUE);
+		return true;
+	}
+
+	void numberField(String label, long value) {
+		if (start(label, false, 20))
+			number(value);
 	}
 
 	void number(long value) {
@@ -76,20 +115,20 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 		text(value, 0, value.length());
 	}
 
-	private void text(String value, int start, int limit) {
+	private boolean text(String value, int start, int limit) {
 		int i = start;
 		while (i < limit && out.length() < end) {
 			int first = i;
 			int fence = Math.min(limit, i + end - out.length());
 			while (i < fence) {
 				char c = value.charAt(i);
-				if (c == '\\' || escaped(c) || Character.isSurrogate(c))
+				if (c == '\\' || json && c == '"' || escaped(c) || Character.isSurrogate(c))
 					break;
 				i++;
 			}
 			out.append(value, first, i);
 			if (i == limit)
-				return;
+				return true;
 			if (i == fence && out.length() == end)
 				break;
 			char c = value.charAt(i++);
@@ -98,7 +137,7 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 				if (format(Character.toCodePoint(c, low))) {
 					if (end - out.length() < 12) {
 						truncated = true;
-						return;
+						return false;
 					}
 					hex(c);
 					hex(low);
@@ -106,19 +145,21 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 				else {
 					if (end - out.length() < 2) {
 						truncated = true;
-						return;
+						return false;
 					}
 					out.append(c).append(low);
 				}
 			}
 			else {
-				int length = c == '\\' || c == '\t' || c == '\n' || c == '\r' ? 2 : 6;
+				int length = c == '\\' || json && c == '"' || c == '\t' || c == '\n' || c == '\r' ? 2 : 6;
 				if (end - out.length() < length) {
 					truncated = true;
-					return;
+					return false;
 				}
 				if (c == '\\')
 					out.append("\\\\");
+				else if (json && c == '"')
+					out.append("\\\"");
 				else if (c == '\t')
 					out.append("\\t");
 				else if (c == '\n')
@@ -131,6 +172,7 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 		}
 		if (i < limit)
 			truncated = true;
+		return i == limit;
 	}
 
 	private static boolean escaped(char c) {
@@ -367,8 +409,13 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 	}
 
 	void extra(String prefix, @Nullable String key, @Nullable Object value) {
-		if (key == null) {
+		if (key == null || key.length() > KEY) {
 			truncated = true;
+			return;
+		}
+		if (json) {
+			if (start(prefix + key, true, 0) && value != null)
+				object(value, 0);
 			return;
 		}
 		var label = new StringBuilder(32);
@@ -421,6 +468,10 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 	}
 
 	void throwable(Throwable thrown) {
+		if (out.length() >= end) {
+			truncated = true;
+			return;
+		}
 		if (throwables >= 8) {
 			text("[throwable limit]");
 			truncated = true;
@@ -479,6 +530,16 @@ final class Ltsv implements BiConsumer<@Nullable String, @Nullable String> {
 	}
 
 	String finish() {
+		if (json) {
+			if (quoted)
+				out.append('"');
+			if (truncated) {
+				if (fields != 0)
+					out.append(',');
+				out.append("\"truncated\":true");
+			}
+			return out.append("}\n").toString();
+		}
 		if (truncated)
 			out.append("\ttruncated:true");
 		return out.append('\n').toString();

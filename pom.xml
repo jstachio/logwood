@@ -11,7 +11,7 @@
     <module>example</module>
     <module>bench</module>
   </modules>
-  <description>A small, defensive LTSV backend for SLF4J and System.Logger.</description>
+  <description>A small, defensive LTSV and JSON Lines backend for SLF4J and System.Logger.</description>
   <url>https://github.com/agentgt/balsa</url>
   <licenses>
     <license>
@@ -67,6 +67,12 @@
     <dependency>
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-core</artifactId>
+      <version>2.21.5</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
   <build>

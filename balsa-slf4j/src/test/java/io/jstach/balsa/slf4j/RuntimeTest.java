@@ -13,6 +13,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonFactoryBuilder;
+import com.fasterxml.jackson.core.JsonToken;
+import com.fasterxml.jackson.core.StreamReadFeature;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -20,6 +24,10 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 class RuntimeTest {
+
+	private static final JsonFactory JSON = new JsonFactoryBuilder()
+		.enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+		.build();
 
 	@TempDir
 	Path temp;
@@ -94,16 +102,43 @@ class RuntimeTest {
 				fields.put("priority", line.substring(1, 2));
 				line = line.substring(3);
 			}
-			for (String field : line.split("\t", -1)) {
-				int colon = field.indexOf(':');
-				assertTrue(colon > 0, field);
-				String key = field.substring(0, colon);
-				assertTrue(key.matches("[A-Za-z0-9_.%\\-]+"), key);
-				assertNull(fields.put(key, decode(field.substring(colon + 1))), "duplicate field " + key);
-			}
+			if (line.startsWith("{"))
+				fields.putAll(parseJson(line));
+			else
+				for (String field : line.split("\t", -1)) {
+					int colon = field.indexOf(':');
+					assertTrue(colon > 0, field);
+					String key = field.substring(0, colon);
+					assertTrue(key.matches("[A-Za-z0-9_.%\\-]+"), key);
+					assertNull(fields.put(key, decode(field.substring(colon + 1))), "duplicate field " + key);
+				}
 			records.add(fields);
 		}
 		return records;
+	}
+
+	private static Map<String, String> parseJson(String line) throws Exception {
+		assertFalse(line.codePoints()
+			.anyMatch(c -> c < 32 || c >= 0x7f && c <= 0x9f || c == 0x2028 || c == 0x2029
+					|| Character.getType(c) == Character.FORMAT || c >= 0xd800 && c <= 0xdfff));
+		try (var parser = JSON.createParser(line)) {
+			assertEquals(JsonToken.START_OBJECT, parser.nextToken());
+			var fields = new HashMap<String, String>();
+			while (parser.nextToken() != JsonToken.END_OBJECT) {
+				assertEquals(JsonToken.FIELD_NAME, parser.currentToken());
+				String key = parser.currentName();
+				var token = parser.nextToken();
+				if (key.equals("threadId"))
+					assertEquals(JsonToken.VALUE_NUMBER_INT, token);
+				else if (key.equals("truncated"))
+					assertEquals(JsonToken.VALUE_TRUE, token);
+				else
+					assertEquals(JsonToken.VALUE_STRING, token);
+				assertNull(fields.put(key, parser.getText()));
+			}
+			assertNull(parser.nextToken());
+			return fields;
+		}
 	}
 
 	private static String stableMetadata(String output) {
@@ -148,6 +183,40 @@ class RuntimeTest {
 		assertEquals("spoof", records.get(2).get("kv.level"));
 		assertEquals("ERROR", records.get(2).get("level"));
 		assertEquals(2, run("system-first", modular, null).size());
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,false", "true,false", "false,true", "true,true" })
+	void jsonLinesSupportBothApisAndJournaldTransport(boolean modular, boolean journal) throws Exception {
+		var records = run("basic", modular, null, "logging.format=jsonl", "logging.journald=" + journal);
+		assertEquals(3, records.size());
+		assertEquals(List.of("INFO", "WARN", "ERROR"), records.stream().map(r -> r.get("level")).toList());
+		assertEquals("hello world", records.getFirst().get("message"));
+		assertEquals("spoof", records.get(2).get("kv.level"));
+		assertTrue(records.stream().allMatch(r -> r.containsKey("time") != journal));
+		assertTrue(lastOutput.startsWith(journal ? "<6>{" : "{"));
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void jsonLinesContainControlInjectionAndReentrantCallbacks(boolean modular) throws Exception {
+		var records = run("injection", modular, null, "logging.format=jsonl");
+		assertEquals(2, records.size());
+		assertEquals("a\tb\nforged:yes\u001b[8m", records.getFirst().get("logger"));
+		assertFalse(records.getFirst().containsKey("forged"));
+		assertEquals("true", records.get(1).get("truncated"));
+		records = run("reentrant", modular, null, "logging.format=jsonl");
+		assertEquals(List.of("outer", "supplier", "object", "event"),
+				records.stream().map(r -> r.get("message")).toList());
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = { false, true })
+	void configurationFailuresUseJsonDiagnosticsWhenTheFormatWasSelected(boolean modular) throws Exception {
+		var records = run("basic", modular, null, "logging.format=jsonl", "logging.level=secret=do-not-print");
+		assertEquals(1, records.size());
+		assertEquals("Balsa disabled: invalid configuration", records.getFirst().get("message"));
+		assertTrue(lastOutput.startsWith("{"));
 	}
 
 	@ParameterizedTest
@@ -225,7 +294,8 @@ class RuntimeTest {
 			assertEquals(1, records.size());
 			assertEquals("Balsa disabled: invalid configuration", records.get(0).get("message"));
 		}
-		for (String property : List.of("logging.level=not-a-level", "logging.journald=not-a-boolean"))
+		for (String property : List.of("logging.level=not-a-level", "logging.journald=not-a-boolean",
+				"logging.format=unknown"))
 			assertEquals(1, run("basic", true, null, property).size());
 		var records = run("basic", false, null, "logging.level.sample=not-a-level");
 		assertEquals(2, records.size());

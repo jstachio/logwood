@@ -7,6 +7,7 @@ repository, then run the example directly:
 ./mvnw -pl example -am install
 java -jar example/target/balsa-example.jar
 java -jar example/target/balsa-example.jar Alice
+java -Dlogging.format=jsonl -jar example/target/balsa-example.jar Alice
 ```
 
 `Main` calls both System.Logger and SLF4J. Its BalsaConfig gives `example.*`

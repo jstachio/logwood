@@ -4,7 +4,7 @@ A small stdout backend for SLF4J 2 and `System.Logger`, inspired by Rainbow Gum
 and slf4j-simple. Java 21+, Zero-Clause BSD. System.Logger needs no runtime dependency;
 `slf4j-api` is optional and needed only for SLF4J logging.
 
-One output, one format, one application SPI. No file or network outputs,
+One output, LTSV or JSON Lines, one application SPI. No file or network outputs,
 configuration files, format patterns, output plugins, asynchronous queues,
 shutdown hooks, caller lookup, or packaging-data lookup.
 
@@ -75,11 +75,22 @@ LoggerFactory.getLogger("app").info("Hello {}", "world");
 System.getLogger("app").log(System.Logger.Level.INFO, "Hello {0}", "world");
 ```
 
-Output is UTF-8 LTSV, with a single LF after each record:
+Output defaults to UTF-8 LTSV, with a single LF after each record:
 
 ```text
 time:2026-11-10T03:00:00.123Z	level:INFO	thread:main	threadId:1	logger:app	message:Hello world
 ```
+
+Select JSON Lines with `-Dlogging.format=jsonl`:
+
+```json
+{"time":"2026-11-10T03:00:00.123Z","level":"INFO","thread":"main","threadId":1,"logger":"app","message":"Hello world"}
+```
+
+Each record is one compact JSON object followed by LF. `threadId` is a number
+and the optional `truncated` flag is a boolean; other values, including context
+and rendered objects, are strings. No object serialization or JSON runtime
+dependency is added. Both formats share the same bounds and defensive escaping.
 
 The separators above are actual tabs. `time` is always UTC ISO-8601 with exactly
 three fractional digits (milliseconds). `BalsaConfig.now()` supplies epoch
@@ -90,6 +101,8 @@ be reported without invoking it again.
 
 With `logging.journald=true`, records omit `time` and skip the clock callback and
 timestamp formatting. Journald supplies the timestamp.
+The syslog priority prefix remains outside the JSON object in this transport mode;
+the journal's `MESSAGE` contains the JSON object after journald strips the prefix.
 
 `threadId` is the current Java thread's numeric ID, including for virtual threads;
 it identifies the virtual thread itself. `thread` contains its name, which can be
@@ -103,7 +116,7 @@ throwable overload writes the `error` field.
 
 ## Configuration
 
-Defaults: INFO, stdout, no journald prefix, and no stored MDC (all MDC operations default to no-ops).
+Defaults: INFO, stdout, LTSV, no journald prefix, and no stored MDC (all MDC operations default to no-ops).
 Logger level keys match Rainbow Gum, so those settings carry over when upgrading.
 The only built-in properties are:
 
@@ -112,6 +125,7 @@ The only built-in properties are:
 | `logging.level` | Root threshold: ALL, TRACE, DEBUG, INFO, WARN/WARNING, ERROR, OFF. |
 | `logging.level.com.example` | Threshold inherited by dotted descendants. |
 | `logging.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
+| `logging.format` | `ltsv` (default) or `jsonl`, case-insensitive. |
 
 ```sh
 java -Dlogging.level=WARN -Dlogging.level.com.example=DEBUG -Dlogging.journald=true ...
@@ -191,7 +205,8 @@ run synchronously and must not retain their consumer. All providers share the
 fields have final precedence, the last event value wins, and each label is emitted
 once. A bounded temporary map is created only when fields exist. Balsa retains
 no context map between records. Built-in metadata remains separate. Labels use
-injective percent-encoded UTF-8, including literal percent signs and malformed UTF-16.
+injective percent-encoded UTF-8 in LTSV, including literal percent signs and malformed
+UTF-16. JSON keeps the original keys after `kv.` and escapes JSON member names.
 
 Balsa's System.Logger path loads no SLF4J classes and never calls
 `BalsaConfig.createMDCAdapter()`. The adapter is a JDK-only storage contract
@@ -210,7 +225,9 @@ application service discovery passes. Markers are ignored.
 See [SECURITY.md](SECURITY.md) for the threat model, limits, and failure behavior.
 Controls, terminal escapes, Unicode format characters (including bidi controls),
 line separators, backslashes, and malformed surrogates are escaped. Values and
-records have fixed limits; clipping is explicit as `truncated:true`.
+records have fixed limits; clipping is explicit as `truncated:true` in LTSV or
+`"truncated":true` in JSONL. JSON clipping preserves complete escapes, member names,
+and closing delimiters.
 
 Balsa retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
@@ -248,6 +265,9 @@ boundary, retaining nullable values allowed by that API. Integration tests cover
 null values and copies in both directions. Normal builds still target Java 21.
 
 ## Measurements
+
+See the [current JAR comparison with Avaje Simple Logger](bench/SIZE.md),
+including required runtime dependencies and exact artifact hashes.
 
 The [JMH benchmark](bench/README.md) compares Balsa with slf4j-simple using the same
 PrintStream sink. It is separate from the runtime artifact. Size and speed are

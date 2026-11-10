@@ -34,6 +34,8 @@ public final class Balsa {
 
 	private boolean journal;
 
+	private boolean json;
+
 	private Balsa() {
 	}
 
@@ -68,6 +70,10 @@ public final class Balsa {
 			contributors.sort(Comparator.comparingInt(KeyValuesProvider::order));
 			KeyValuesProvider[] values = contributors.toArray(KeyValuesProvider[]::new);
 
+			String format = selected.propertyOrNull("logging.format");
+			if (format != null && !format.equalsIgnoreCase("ltsv") && !format.equalsIgnoreCase("jsonl"))
+				throw new IllegalArgumentException("Invalid log format");
+			json = "jsonl".equalsIgnoreCase(format);
 			Level level = selected.levelOrNull("");
 			String prefix = selected.propertyOrNull("logging.journald");
 			if (prefix != null && !prefix.equalsIgnoreCase("true") && !prefix.equalsIgnoreCase("false"))
@@ -128,13 +134,13 @@ public final class Balsa {
 	}
 
 	void write(String name, Level level, @Nullable String message, @Nullable Object @Nullable [] args,
-			@Nullable Throwable thrown, @Nullable Consumer<Ltsv> eventValues, @Nullable ResourceBundle bundle,
+			@Nullable Throwable thrown, @Nullable Consumer<RecordEncoder> eventValues, @Nullable ResourceBundle bundle,
 			int mode) {
 		if (state != 2 || ACTIVE.get() == Boolean.TRUE)
 			return;
 		ACTIVE.set(Boolean.TRUE);
 		try {
-			var out = new Ltsv(journal ? priority(level) : -1);
+			var out = new RecordEncoder(journal ? priority(level) : -1, json);
 			if (!journal)
 				out.time(Objects.requireNonNull(config).now());
 			out.start("level");
@@ -142,8 +148,7 @@ public final class Balsa {
 			var thread = Thread.currentThread();
 			out.start("thread");
 			out.text(thread.getName());
-			out.start("threadId");
-			out.number(thread.threadId());
+			out.numberField("threadId", thread.threadId());
 			out.start("logger");
 			out.text(name);
 			out.start("message");
@@ -199,13 +204,12 @@ public final class Balsa {
 		if (!reported.compareAndSet(false, true))
 			return;
 		try {
-			var out = new Ltsv(journal ? 3 : -1);
+			var out = new RecordEncoder(journal ? 3 : -1, json);
 			if (!journal)
 				out.time(System.currentTimeMillis());
 			out.start("level");
 			out.text("ERROR");
-			out.start("threadId");
-			out.number(Thread.currentThread().threadId());
+			out.numberField("threadId", Thread.currentThread().threadId());
 			out.start("logger");
 			out.text("io.jstach.balsa");
 			out.start("message");
@@ -217,7 +221,7 @@ public final class Balsa {
 		}
 	}
 
-	private static void print(Ltsv out) {
+	private static void print(RecordEncoder out) {
 		System.out.writeBytes(out.finish().getBytes(StandardCharsets.UTF_8));
 	}
 

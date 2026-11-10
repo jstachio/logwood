@@ -1,5 +1,5 @@
 /**
- * A stdout-only, bounded LTSV backend for SLF4J 2 and System.Logger.
+ * A stdout-only, bounded LTSV and JSON Lines backend for SLF4J 2 and System.Logger.
  * The only application service type is BalsaService, loaded once with
  * ServiceLoader. No files, sockets, shutdown hooks, output plugins, or format plugins.
  */

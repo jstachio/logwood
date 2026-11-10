@@ -15,6 +15,12 @@ public final class SystemOnlySmoke {
 	}
 
 	public static void main(String[] args) throws Exception {
+		try {
+			Class.forName("com.fasterxml.jackson.core.JsonFactory", false, ClassLoader.getSystemClassLoader());
+			throw new AssertionError("JSON parser present at runtime");
+		}
+		catch (ClassNotFoundException expected) {
+		}
 		if (ModuleLayer.boot().findModule("org.slf4j").isPresent())
 			throw new AssertionError("SLF4J module resolved");
 		try {
