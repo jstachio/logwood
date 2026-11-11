@@ -148,6 +148,15 @@
   </build>
   <profiles>
     <profile>
+      <id>scoped-key-values</id>
+      <activation>
+        <jdk>[25,)</jdk>
+      </activation>
+      <modules>
+        <module>logwood-scopedkeyvalues</module>
+      </modules>
+    </profile>
+    <profile>
       <id>nullaway</id>
       <build>
         <plugins>
