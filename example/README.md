@@ -5,12 +5,12 @@ repository, then run the example directly:
 
 ```sh
 ./mvnw -pl example -am install
-java -jar example/target/balsa-example.jar
-java -jar example/target/balsa-example.jar Alice
-java -Dlogging.format=jsonl -jar example/target/balsa-example.jar Alice
+java -jar example/target/logwood-example.jar
+java -jar example/target/logwood-example.jar Alice
+java -Dlogging.format=jsonl -jar example/target/logwood-example.jar Alice
 ```
 
-`Main` calls both System.Logger and SLF4J. Its BalsaConfig gives `example.*`
+`Main` calls both System.Logger and SLF4J. Its LogwoodConfig gives `example.*`
 loggers DEBUG by default while honoring explicit `logging.level.<logger>` properties. Two
 KeyValuesProviders demonstrate ordering: defaults at -10 are overlaid by
 application fields at the default order 0. The final fluent log call overlays

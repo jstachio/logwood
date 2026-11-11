@@ -1,12 +1,12 @@
 # Security model
 
-Balsa treats log data as untrusted text. Its goals are record integrity,
+Logwood treats log data as untrusted text. Its goals are record integrity,
 terminal safety, bounded backend work, and minimal retained state. It does not
 redact secrets intentionally passed to the logger.
 
 ## Record integrity
 
-Only Balsa emits raw field delimiters and record terminators. Data cannot add a
+Only Logwood emits raw field delimiters and record terminators. Data cannot add a
 new field, newline, journald priority, or terminal escape sequence. C0 controls,
 DEL/C1, Unicode line separators, all Unicode FORMAT characters, backslashes, and
 unpaired surrogates are escaped. The Unicode 17 FORMAT set is covered on the Java 21 baseline,
@@ -25,14 +25,14 @@ Marker arguments and event marker accessors are ignored.
 
 The [LTSV encoding reference](doc/ltsv.md) defines the exact character ranges,
 escape spellings, label extensions, and decoding order. All input ESC characters
-are escaped, including SGR conceal sequences. Balsa emits no formatter-owned
+are escaped, including SGR conceal sequences. Logwood emits no formatter-owned
 ANSI sequences. Escape decoding belongs after record/field splitting and must
 run once; decoding recursively can turn literal escape text back into controls.
 
 Each finished record is encoded as UTF-8 and submitted in one
 `System.out.writeBytes(byte[])` call. The standard PrintStream serializes that
 call. Replacing System.out with a differently encoded PrintStream does not
-change the UTF-8 encoding. Balsa never closes or caches stdout;
+change the UTF-8 encoding. Logwood never closes or caches stdout;
 replacing System.out takes effect for later records. It does not coordinate
 unrelated writers or sandbox an application-supplied PrintStream.
 
@@ -62,7 +62,7 @@ fields are never partially emitted. Saturation does not switch to an unescaped
 fallback. Unsafe formatting patterns produce an escaped rejection marker.
 System.Logger arguments are bounded before MessageFormat expansion. Large
 numeric values are not expanded without bounds. No input-sized formatter or
-class-name cache is retained. Balsa retains no marker state. A context callback
+class-name cache is retained. Logwood retains no marker state. A context callback
 must not retain or asynchronously use its consumer; late calls after it returns
 are ignored. Providers run in ascending order, with fluent fields applied last.
 A bounded temporary map merges duplicate keys before encoding, so overridden
@@ -91,10 +91,10 @@ As with any in-process logger, application callbacks are code, not a sandbox.
 They can block or allocate before returning. This includes toString, suppliers,
 context providers, MDC adapters, resource bundles, throwable accessors, and code evaluated by a
 facade before it reaches the backend. Throwable accessors may clone arrays.
-An opt-in BalsaService.BalsaConfig.MDCAdapter controls its own storage. Its JDK-only contract
+An opt-in LogwoodService.LogwoodConfig.MDCAdapter controls its own storage. Its JDK-only contract
 is bridged by the SLF4J provider, which is loaded only when SLF4J is used.
 System.Logger and configuration discovery also work with the SLF4J API absent. Stdout I/O can block, and output
-errors follow PrintStream's error-handling semantics. Balsa's own output and
+errors follow PrintStream's error-handling semantics. Logwood's own output and
 traversal are bounded; it cannot bound arbitrary application execution.
 
 ## Validation
@@ -105,7 +105,7 @@ reentrant callbacks, configuration failures, serialization, cache bounds,
 concurrent records, localization, and actual provider discovery in fresh JVMs
 on both the classpath and module path. Packaged-JAR tests omit the SLF4J JAR
 entirely, verify its classes are unavailable and never loaded, and compile/run
-a named application with only Balsa. Tests also cover observable-but-unresolved
+a named application with only Logwood. Tests also cover observable-but-unresolved
 SLF4J modules. Fresh JVM class-initialization traces
 verify System.Logger leaves the SLF4J facades and provider uninitialized, with
 both default settings and custom context/MDC configurations.

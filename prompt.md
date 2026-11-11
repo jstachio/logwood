@@ -4,9 +4,9 @@ Smallest slf4j and system logger combined implementation.
 
 # Project crap
 
-gav: io.jstach.balsa:balsa
+gav: io.jstach.logwood:logwood
 
-package: io.jstach.balsa
+package: io.jstach.logwood
 
 license: zero bsd
 
@@ -30,7 +30,7 @@ rainbow gum and slf4j-simple
 ```java
 
 // or interface
-public abstract class BalsaConfig {
+public abstract class LogwoodConfig {
 
 // maybe an int instead.
 public System.Logger.Level levelOrNull(String loggerName) {

@@ -1,6 +1,6 @@
 {
-  "date": "2026-11-10",
-  "balsaBuild": "Amazon Corretto 21.0.13, --release 21, debug:none; normal Maven JARs",
+  "date": "2026-11-11",
+  "logwoodBuild": "Amazon Corretto 21.0.13, --release 21, debug:none; normal Maven JARs",
   "runtimeExcludes": [
     "slf4j-api",
     "test dependencies",
@@ -11,19 +11,19 @@
     "experimental scoped module"
   ],
   "artifacts": {
-    "io.jstach.balsa:balsa:0.1.0-SNAPSHOT": {
-      "coordinate": "io.jstach.balsa:balsa:0.1.0-SNAPSHOT",
-      "jar": "balsa-0.1.0-SNAPSHOT.jar",
-      "bytes": 22723,
+    "io.jstach.logwood:logwood:0.1.0-SNAPSHOT": {
+      "coordinate": "io.jstach.logwood:logwood:0.1.0-SNAPSHOT",
+      "jar": "logwood-0.1.0-SNAPSHOT.jar",
+      "bytes": 22857,
       "classFiles": 14,
-      "sha256": "ac3d444c54c1efab6a9038f4c2b90136e48c474aa67460d4fda0cc73de546ebe"
+      "sha256": "f9350e6a878e7aaa54f570cb309ee6ebfd831597c5c0c7216e0e08e7003cb868"
     },
-    "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT": {
-      "coordinate": "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT",
-      "jar": "balsa-slf4j-0.1.0-SNAPSHOT.jar",
-      "bytes": 2234,
+    "io.jstach.logwood:logwood-slf4j:0.1.0-SNAPSHOT": {
+      "coordinate": "io.jstach.logwood:logwood-slf4j:0.1.0-SNAPSHOT",
+      "jar": "logwood-slf4j-0.1.0-SNAPSHOT.jar",
+      "bytes": 2254,
       "classFiles": 3,
-      "sha256": "f10e82e018cd18f358ba72ce25faa6ed73f4d15c541f869b028fee01b9f31068"
+      "sha256": "2c472b22d14a24dcd11993a18f93066653e6ea58e236789e3b93fac558d8b53c"
     },
     "org.jspecify:jspecify:1.0.0": {
       "coordinate": "org.jspecify:jspecify:1.0.0",
@@ -76,11 +76,11 @@
     }
   },
   "runtimeSets": {
-    "Balsa": {
-      "bytes": 28776,
+    "Logwood": {
+      "bytes": 28930,
       "artifacts": [
-        "io.jstach.balsa:balsa:0.1.0-SNAPSHOT",
-        "io.jstach.balsa:balsa-slf4j:0.1.0-SNAPSHOT",
+        "io.jstach.logwood:logwood:0.1.0-SNAPSHOT",
+        "io.jstach.logwood:logwood-slf4j:0.1.0-SNAPSHOT",
         "org.jspecify:jspecify:1.0.0"
       ]
     },

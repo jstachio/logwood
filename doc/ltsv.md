@@ -1,10 +1,10 @@
 # LTSV encoding
 
-LTSV is Balsa's default (`logging.format=ltsv`). Each record is UTF-8 text with
+LTSV is Logwood's default (`logging.format=ltsv`). Each record is UTF-8 text with
 tab-separated `label:value` fields and exactly one final LF. Split a field at
 its **first** colon: colons may occur in values. Values are never quoted.
 These rules apply to messages, logger and thread names, context and fluent
-values, and throwable text. Balsa does not emit ANSI colors.
+values, and throwable text. Logwood does not emit ANSI colors.
 
 ## Values
 
@@ -63,7 +63,7 @@ backslash escapes in one pass; recursively decoding `\\n` would incorrectly
 turn literal escape text into a newline. For labels, first remove `kv.`, then
 handle the empty-key sentinel, `%uXXXX` code units, and UTF-8 percent bytes.
 Do not percent-decode a decoded result again: `%25ud800` is literal `%ud800`.
-This escaping is Balsa's convention layered on LTSV; a generic LTSV reader
+This escaping is Logwood's convention layered on LTSV; a generic LTSV reader
 can split fields but needs these rules to recover original text.
 
 An encoded value is limited to 4,096 UTF-16 code units and a complete record

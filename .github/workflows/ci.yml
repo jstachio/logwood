@@ -16,15 +16,15 @@ jobs:
           java-version: '${{ matrix.java }}'
           cache: maven
       - run: ./mvnw --batch-mode clean install javadoc:javadoc
-      - run: java -jar example/target/balsa-example.jar
-      - run: java -Dlogging.format=jsonl -jar example/target/balsa-example.jar
+      - run: java -jar example/target/logwood-example.jar
+      - run: java -Dlogging.format=jsonl -jar example/target/logwood-example.jar
       - name: Verify example is excluded from deployment
         run: |
-          example_repo="${RUNNER_TEMP}/balsa-example-deploy"
+          example_repo="${RUNNER_TEMP}/logwood-example-deploy"
           ./mvnw --batch-mode -pl example deploy \
             -Dmaven.deploy.skip=false \
             "-DaltDeploymentRepository=example-check::file://${example_repo}"
-          test ! -e "${example_repo}/io/jstach/balsa/balsa-example"
+          test ! -e "${example_repo}/io/jstach/logwood/logwood-example"
       - name: Check library nullness
         if: matrix.java == '25'
         run: bin/analyze.sh

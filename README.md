@@ -1,8 +1,11 @@
-# Balsa
+# Logwood
 
 A small stdout backend for SLF4J 2 and `System.Logger`, inspired by Rainbow Gum
 and slf4j-simple. Java 21+, Zero-Clause BSD. System.Logger needs no runtime dependency;
 `slf4j-api` is optional and needed only for SLF4J logging.
+
+Named after [logwood (*Haematoxylum campechianum*)](https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:316401-2/general-information),
+a shrub or small tree native from southern Mexico to Honduras.
 
 One output, LTSV or JSON Lines, one application SPI. No file or network outputs,
 configuration files, format patterns, output plugins, asynchronous queues,
@@ -10,12 +13,12 @@ shutdown hooks, caller lookup, or packaging-data lookup.
 
 ## Build and use
 
-This is a Maven reactor: `balsa/` builds the runtime artifact, `balsa-slf4j/`
+This is a Maven reactor: `logwood/` builds the runtime artifact, `logwood-slf4j/`
 adds SLF4J module-path registration, `example/` builds a runnable application,
 and `bench/` builds its isolated JMH harness.
-The root `balsa-parent` POM shares dependency versions,
+The root `logwood-parent` POM shares dependency versions,
 Java 21 compiler settings, Spring formatting validation, and build plugins.
-The runtime coordinates remain `io.jstach.balsa:balsa`.
+The runtime coordinates are `io.jstach.logwood:logwood`.
 
 ```sh
 ./mvnw spring-javaformat:apply
@@ -25,8 +28,8 @@ The runtime coordinates remain `io.jstach.balsa:balsa`.
 
 ```xml
 <dependency>
-  <groupId>io.jstach.balsa</groupId>
-  <artifactId>balsa</artifactId>
+  <groupId>io.jstach.logwood</groupId>
+  <artifactId>logwood</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
@@ -37,17 +40,17 @@ repository:
 
 ```sh
 ./mvnw -pl example -am install
-java -jar example/target/balsa-example.jar
+java -jar example/target/logwood-example.jar
 ```
 
-For just the runtime, use `./mvnw -pl balsa -am clean verify`.
+For just the runtime, use `./mvnw -pl logwood -am clean verify`.
 
 The build validates the same Spring Java Format 0.0.48 style used by Rainbow Gum.
 Run `spring-javaformat:apply` after editing Java sources; CI rejects formatting drift.
 
 This snapshot must first be installed locally; it is not a published release.
 System.Logger applications need only the dependency above and, on JPMS,
-`requires io.jstach.balsa`. SLF4J can be absent from both compilation and runtime.
+`requires io.jstach.logwood`. SLF4J can be absent from both compilation and runtime.
 The core descriptor has `requires static org.slf4j`; its Maven dependency is
 optional. Placing SLF4J on the module path does not force it to resolve.
 
@@ -56,19 +59,19 @@ and enables automatic discovery on both the classpath and module path:
 
 ```xml
 <dependency>
-  <groupId>io.jstach.balsa</groupId>
-  <artifactId>balsa-slf4j</artifactId>
+  <groupId>io.jstach.logwood</groupId>
+  <artifactId>logwood-slf4j</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
 ```
 
 A modular SLF4J application can `requires org.slf4j`; service binding discovers
-the provider. It may also explicitly `requires io.jstach.balsa.slf4j`.
+the provider. It may also explicitly `requires io.jstach.logwood.slf4j`.
 The registration module contains one subclass and its module descriptor.
 JPMS validates service types during resolution, so the SLF4J `provides` directive
 belongs here. The core JAR retains its classpath service descriptor; a classpath
-application can also use `balsa` with an explicit `slf4j-api` dependency.
-Use Balsa as the only SLF4J provider.
+application can also use `logwood` with an explicit `slf4j-api` dependency.
+Use Logwood as the only SLF4J provider.
 
 ```java
 LoggerFactory.getLogger("app").info("Hello {}", "world");
@@ -108,7 +111,7 @@ labels, malformed UTF-16 handling, decoding order, and truncation. All input ESC
 characters are escaped, including SGR sequences that could conceal log text.
 
 The separators above are actual tabs. `time` is always UTC ISO-8601 with exactly
-three fractional digits (milliseconds). `BalsaConfig.now()` supplies epoch
+three fractional digits (milliseconds). `LogwoodConfig.now()` supplies epoch
 milliseconds and defaults to `System.currentTimeMillis()`. Enabled events read
 it once. Override it to supply another clock; overrides must be thread-safe.
 Failure diagnostics use the system clock, so a failing clock callback can still
@@ -153,20 +156,20 @@ Failure diagnostics are independent of application thresholds.
 
 ### The application SPI
 
-`io.jstach.balsa.spi` is the core module's only exported package. Its sealed
-`BalsaService` interface has two non-sealed nested base classes:
+`io.jstach.logwood.spi` is the core module's only exported package. Its sealed
+`LogwoodService` interface has two non-sealed nested base classes:
 
-* `BalsaService.BalsaConfig` supplies the clock, levels, properties, and optional MDC storage.
+* `LogwoodService.LogwoodConfig` supplies the clock, levels, properties, and optional MDC storage.
   Register zero or one configuration; the default applies when none is present.
-* `BalsaService.KeyValuesProvider` pushes fields through
+* `LogwoodService.KeyValuesProvider` pushes fields through
   `keyValues(BiConsumer<String, String>)`. Register any number of providers.
   `order()` defaults to zero; providers run in ascending order and later values
   override earlier values for the same key. Equal orders retain discovery order,
   so choose distinct orders when override precedence matters.
 
-Balsa makes one ServiceLoader pass over `BalsaService`, constructs services once,
+Logwood makes one ServiceLoader pass over `LogwoodService`, constructs services once,
 selects their roles with instanceof, and sorts key-value providers once during
-initialization. The loader uses Balsa's class loader, not a per-request context
+initialization. The loader uses Logwood's class loader, not a per-request context
 class loader. Constructors and order methods must not depend on logging.
 Bootstrap calls are suppressed until initialization completes; SLF4J itself may
 separately buffer bootstrap calls.
@@ -174,7 +177,7 @@ separately buffer bootstrap calls.
 For example, application fields can be supplied independently of configuration:
 
 ```java
-import io.jstach.balsa.spi.BalsaService.KeyValuesProvider;
+import io.jstach.logwood.spi.LogwoodService.KeyValuesProvider;
 import java.util.function.BiConsumer;
 
 public final class MyValues extends KeyValuesProvider {
@@ -187,9 +190,9 @@ public final class MyValues extends KeyValuesProvider {
 Custom settings use the other base class:
 
 ```java
-import io.jstach.balsa.spi.BalsaService.BalsaConfig;
+import io.jstach.logwood.spi.LogwoodService.LogwoodConfig;
 
-public final class MyConfig extends BalsaConfig {
+public final class MyConfig extends LogwoodConfig {
   @Override public System.Logger.Level levelOrNull(String name) {
     return name.isEmpty() ? System.Logger.Level.WARNING : super.levelOrNull(name);
   }
@@ -197,7 +200,7 @@ public final class MyConfig extends BalsaConfig {
 ```
 
 On the classpath, list all services in
-`META-INF/services/io.jstach.balsa.spi.BalsaService`:
+`META-INF/services/io.jstach.logwood.spi.LogwoodService`:
 
 ```text
 my.app.MyConfig
@@ -208,8 +211,8 @@ On the module path:
 
 ```java
 module my.app {
-  requires io.jstach.balsa;
-  provides io.jstach.balsa.spi.BalsaService with my.app.MyConfig, my.app.MyValues;
+  requires io.jstach.logwood;
+  provides io.jstach.logwood.spi.LogwoodService with my.app.MyConfig, my.app.MyValues;
 }
 ```
 
@@ -218,16 +221,16 @@ root. Override it to replace property-based level selection. Key-value callbacks
 run synchronously and must not retain their consumer. All providers share the
 32-key context budget. Context and fluent fields share `kv.` labels; fluent
 fields have final precedence, the last event value wins, and each label is emitted
-once. A bounded temporary map is created only when fields exist. Balsa retains
+once. A bounded temporary map is created only when fields exist. Logwood retains
 no context map between records. Built-in metadata remains separate. LTSV labels
 use percent-encoded UTF-8, a `%` sentinel for the empty key, and a `%uXXXX`
 extension for unpaired UTF-16 surrogates. Literal percent signs become `%25`,
 keeping these forms distinct. JSON keeps the original keys after `kv.` and
 escapes JSON member names.
 
-Balsa's System.Logger path loads no SLF4J classes and never calls
-`BalsaConfig.createMDCAdapter()`. The adapter is a JDK-only storage contract
-under `BalsaService.BalsaConfig.MDCAdapter`; null selects the no-op bridge.
+Logwood's System.Logger path loads no SLF4J classes and never calls
+`LogwoodConfig.createMDCAdapter()`. The adapter is a JDK-only storage contract
+under `LogwoodService.LogwoodConfig.MDCAdapter`; null selects the no-op bridge.
 A custom adapter supplies map operations, with copy accessors and
 `setContextMap(null)` clearing context. SLF4J deque operations are no-ops.
 To include MDC in records, a separate KeyValuesProvider can read the same
@@ -246,7 +249,7 @@ records have fixed limits; clipping is explicit as `truncated:true` in LTSV or
 `"truncated":true` in JSONL. JSON clipping preserves complete escapes, member names,
 and closing delimiters.
 
-Balsa retains no logger-name registry or marker state.
+Logwood retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
 
 The core has eleven types plus package and module descriptors; optional JPMS SLF4J
@@ -290,7 +293,7 @@ null values and copies in both directions. Normal builds still target Java 21.
 See the [current JAR comparison with Avaje Simple Logger](bench/SIZE.md),
 including required runtime dependencies and exact artifact hashes.
 
-The [JMH benchmark](bench/README.md) compares Balsa with slf4j-simple using the same
+The [JMH benchmark](bench/README.md) compares Logwood with slf4j-simple using the same
 PrintStream sink. It is separate from the runtime artifact. Size and speed are
 measured goals, not a blanket claim that an escaped structured logger wins every
 workload. The checked-in report is the initial implementation baseline at commit `994a006`;

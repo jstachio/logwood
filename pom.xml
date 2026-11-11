@@ -1,18 +1,18 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
-  <groupId>io.jstach.balsa</groupId>
-  <artifactId>balsa-parent</artifactId>
+  <groupId>io.jstach.logwood</groupId>
+  <artifactId>logwood-parent</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
-  <name>Balsa Parent</name>
+  <name>Logwood Parent</name>
   <modules>
-    <module>balsa</module>
-    <module>balsa-slf4j</module>
+    <module>logwood</module>
+    <module>logwood-slf4j</module>
     <module>example</module>
     <module>bench</module>
   </modules>
   <description>A small, defensive LTSV and JSON Lines backend for SLF4J and System.Logger.</description>
-  <url>https://github.com/agentgt/balsa</url>
+  <url>https://github.com/jstachio/logwood</url>
   <licenses>
     <license>
       <name>Zero-Clause BSD</name>
@@ -37,13 +37,13 @@
         <version>${jspecify.version}</version>
       </dependency>
       <dependency>
-        <groupId>io.jstach.balsa</groupId>
-        <artifactId>balsa-slf4j</artifactId>
+        <groupId>io.jstach.logwood</groupId>
+        <artifactId>logwood-slf4j</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
-        <groupId>io.jstach.balsa</groupId>
-        <artifactId>balsa</artifactId>
+        <groupId>io.jstach.logwood</groupId>
+        <artifactId>logwood</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

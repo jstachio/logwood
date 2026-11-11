@@ -1,0 +1,144 @@
+package io.jstach.logwood;
+
+import static org.junit.jupiter.api.Assertions.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ServiceConfigurationError;
+import org.junit.jupiter.api.Test;
+
+class CoreTest {
+
+	private static String stableTime(String output) {
+		return output.replaceAll("(?m)^time:[^\\t\\r\\n]+\\t", "time:<time>\t");
+	}
+
+	private static Logwood fresh() throws Exception {
+		var constructor = Logwood.class.getDeclaredConstructor();
+		constructor.setAccessible(true);
+		var core = constructor.newInstance();
+		core.initialize();
+		return core;
+	}
+
+	@Test
+	void loggerNamesAreNotRetained() throws Exception {
+		var core = fresh();
+		assertNotSame(core.getLogger("same"), core.getLogger("same"));
+	}
+
+	@Test
+	void serializationRebindsAndResolvesThresholdInsteadOfEnablingEverything() throws Exception {
+		var logger = new LogwoodLog("serialized", Logwood.instance());
+		assertTrue(logger.isInfoEnabled());
+		var bytes = new ByteArrayOutputStream();
+		try (var output = new ObjectOutputStream(bytes)) {
+			output.writeObject(logger);
+		}
+		String before = System.getProperty("logging.level.serialized");
+		try {
+			System.setProperty("logging.level.serialized", "OFF");
+			try (var input = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+				var restored = (LogwoodLog) input.readObject();
+				assertEquals("serialized", restored.getName());
+				assertFalse(restored.isErrorEnabled());
+			}
+		}
+		finally {
+			if (before == null)
+				System.clearProperty("logging.level.serialized");
+			else
+				System.setProperty("logging.level.serialized", before);
+		}
+	}
+
+	@Test
+	void callbackGuardDoesNotPermanentlyDisableAnUnresolvedLogger() {
+		var logger = Logwood.instance().getLogger("guarded");
+		Logwood.ACTIVE.set(Boolean.TRUE);
+		try {
+			assertThrows(NullPointerException.class, () -> logger.isLoggable(null));
+			assertFalse(logger.isLoggable(System.Logger.Level.INFO));
+		}
+		finally {
+			Logwood.ACTIVE.set(Boolean.FALSE);
+		}
+		assertTrue(logger.isLoggable(System.Logger.Level.INFO));
+	}
+
+	@Test
+	void oversizedNamesDisableOnlyThoseLoggersWithOneSanitizedDiagnostic() throws Exception {
+		var core = fresh();
+		var before = System.out;
+		var bytes = new ByteArrayOutputStream();
+		try (var capture = new PrintStream(bytes, false, StandardCharsets.UTF_8)) {
+			System.setOut(capture);
+			assertFalse(core.getLogger("secret".repeat(1000)).isLoggable(System.Logger.Level.INFO));
+			assertFalse(core.getLogger("a.".repeat(100)).isLoggable(System.Logger.Level.ERROR));
+			assertTrue(core.getLogger("normal").isLoggable(System.Logger.Level.INFO));
+		}
+		finally {
+			System.setOut(before);
+		}
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:%d\tlogger:io.jstach.logwood\tmessage:Logwood disabled a logger: invalid level configuration
+						"""
+					.formatted(Thread.currentThread().threadId()),
+				stableTime(bytes.toString(StandardCharsets.UTF_8)));
+	}
+
+	@Test
+	void fatalErrorsAreNotSwallowedEvenWhenServiceLoaderWrapsThem() {
+		var fatal = new OutOfMemoryError("test only");
+		var wrapped = new ServiceConfigurationError("provider failed", fatal);
+		assertSame(fatal, assertThrows(OutOfMemoryError.class, () -> Logwood.nonFatal(wrapped)));
+	}
+
+	@Test
+	void outputIsUtf8EvenWhenThePrintStreamUsesAnotherCharset() throws Exception {
+		var core = fresh();
+		var before = System.out;
+		var bytes = new ByteArrayOutputStream();
+		try (var capture = new PrintStream(bytes, false, StandardCharsets.UTF_16BE)) {
+			System.setOut(capture);
+			core.getLogger("utf8").log(System.Logger.Level.INFO, "é😀");
+		}
+		finally {
+			System.setOut(before);
+		}
+		assertEquals("""
+				time:<time>\tlevel:INFO\tthread:%s\tthreadId:%d\tlogger:utf8\tmessage:é😀
+				""".formatted(Thread.currentThread().getName(), Thread.currentThread().threadId()),
+				stableTime(bytes.toString(StandardCharsets.UTF_8)));
+	}
+
+	@Test
+	void stdoutCallbacksCannotRecursivelyLog() throws Exception {
+		var core = fresh();
+		var logger = core.getLogger("stdout");
+		var before = System.out;
+		var bytes = new ByteArrayOutputStream();
+		try (var capture = new PrintStream(bytes, false, StandardCharsets.UTF_8) {
+			@Override
+			public void write(byte[] value, int offset, int length) {
+				logger.log(System.Logger.Level.ERROR, "nested");
+				super.write(value, offset, length);
+			}
+		}) {
+			System.setOut(capture);
+			logger.log(System.Logger.Level.INFO, "outer");
+		}
+		finally {
+			System.setOut(before);
+		}
+		assertEquals("""
+				time:<time>\tlevel:INFO\tthread:%s\tthreadId:%d\tlogger:stdout\tmessage:outer
+				""".formatted(Thread.currentThread().getName(), Thread.currentThread().threadId()),
+				stableTime(bytes.toString(StandardCharsets.UTF_8)));
+	}
+
+}

@@ -1,9 +1,9 @@
-/** A runnable application demonstrating the Balsa SPI and both logging APIs. */
-module io.jstach.balsa.example {
+/** A runnable application demonstrating the Logwood SPI and both logging APIs. */
+module io.jstach.logwood.example {
   requires static org.jspecify;
-  requires io.jstach.balsa.slf4j;
-  provides io.jstach.balsa.spi.BalsaService with
-    io.jstach.balsa.example.Main.ApplicationFields,
-    io.jstach.balsa.example.Main.Config,
-    io.jstach.balsa.example.Main.DefaultFields;
+  requires io.jstach.logwood.slf4j;
+  provides io.jstach.logwood.spi.LogwoodService with
+    io.jstach.logwood.example.Main.ApplicationFields,
+    io.jstach.logwood.example.Main.Config,
+    io.jstach.logwood.example.Main.DefaultFields;
 }
