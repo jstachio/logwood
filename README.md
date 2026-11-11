@@ -1,5 +1,9 @@
 # Logwood
 
+Experimental branch: [ScopedKeyValues integration](logwood-scopedkeyvalues/README.md).
+The core targets Java 21; the optional provider targets Java 25 and is included
+in the reactor automatically on JDK 25+. Scoped context needs no LogwoodConfig.
+
 A small stdout backend for SLF4J 2 and `System.Logger`, inspired by Rainbow Gum
 and slf4j-simple. Java 21+, Zero-Clause BSD. System.Logger needs no runtime dependency;
 `slf4j-api` is optional and needed only for SLF4J logging.
