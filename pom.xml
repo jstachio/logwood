@@ -424,5 +424,54 @@
         </plugins>
       </build>
     </profile>
+    <profile>
+      <!-- Run with bin/mutation.sh. Never active in CI. -->
+      <id>mutation</id>
+      <properties>
+        <!-- PIT maps mutants to lines. -->
+        <maven.compiler.debuglevel>lines,source</maven.compiler.debuglevel>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-maven</artifactId>
+            <version>1.30.2</version>
+            <dependencies>
+              <dependency>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-junit5-plugin</artifactId>
+                <version>1.2.3</version>
+              </dependency>
+            </dependencies>
+            <executions>
+              <execution>
+                <id>mutation</id>
+                <phase>verify</phase>
+                <goals><goal>mutationCoverage</goal></goals>
+              </execution>
+            </executions>
+            <configuration>
+              <targetClasses><param>io.jstach.logwood.*</param></targetClasses>
+              <targetTests><param>io.jstach.logwood.*</param></targetTests>
+              <!-- These run Logwood in child JVMs that load the unmutated classes. -->
+              <excludedTestClasses>
+                <param>io.jstach.logwood.OptionalSlf4jTest</param>
+                <param>io.jstach.logwood.slf4j.RuntimeTest</param>
+                <param>io.jstach.logwood.scopedkeyvalues.DiscoveryTest</param>
+              </excludedTestClasses>
+              <mutators><mutator>STRONGER</mutator></mutators>
+              <threads>8</threads>
+              <timestampedReports>false</timestampedReports>
+              <failWhenNoMutations>false</failWhenNoMutations>
+              <outputFormats>
+                <outputFormat>HTML</outputFormat>
+                <outputFormat>XML</outputFormat>
+              </outputFormats>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>
