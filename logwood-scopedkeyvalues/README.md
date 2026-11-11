@@ -1,4 +1,4 @@
-# Experimental ScopedKeyValues provider
+# ScopedKeyValues provider
 
 This module implements Rainbow Gum **0.17.2** ScopedKeyValues with Java 25
 ScopedValue and automatically contributes context to Logwood through
@@ -13,7 +13,8 @@ ThreadLocal context storage. System.Logger works with the SLF4J API absent.
 
 ## Build and use
 
-The root reactor includes this module automatically on JDK 25+:
+Build with JDK 27 or newer. The root reactor includes this module by default;
+its runtime requirement remains Java 25:
 
 ```sh
 ./mvnw spring-javaformat:apply
@@ -26,7 +27,7 @@ bin/analyze.sh
 <dependency>
   <groupId>io.jstach.logwood</groupId>
   <artifactId>logwood-scopedkeyvalues</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
 </dependency>
 ```
 

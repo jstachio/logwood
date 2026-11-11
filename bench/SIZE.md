@@ -1,13 +1,13 @@
 # JAR size comparison
 
-Logwood measured 2026-11-11. Logwood uses the normal Maven build with Amazon Corretto
-21.0.13, Java 21 bytecode, and `debug:none`. Avaje uses the published Maven
+Logwood measured 2026-11-11. Logwood uses the normal Maven build with OpenJDK
+27+35, Java 21 bytecode (`--release 21`), and `debug:none`. Avaje uses the published Maven
 Central 2.0 artifacts. These are compressed on-disk JAR sizes, including their
 normal descriptors and resources. This comparison measures size, not speed.
 
 | Implementation | Provider JARs | Required runtime JARs, excluding SLF4J API |
 | --- | ---: | ---: |
-| Logwood core + SLF4J module | 25,111 bytes (24.52 KiB) | 28,930 bytes (28.25 KiB) |
+| Logwood core + SLF4J module | 25,110 bytes (24.52 KiB) | 28,929 bytes (28.25 KiB) |
 | Avaje Simple JSON Logger 2.0 | 49,832 bytes (48.66 KiB) | 180,520 bytes (176.29 KiB) |
 | Avaje Simple Logger 2.0 | 55,869 bytes (54.56 KiB) | 285,416 bytes (278.73 KiB) |
 
@@ -26,7 +26,7 @@ avaje-json-core, and JSpecify.
 
 Both runtime totals exclude each implementation's SLF4J API (Logwood 2.0.20,
 Avaje 2.0.18), test/provided dependencies, and optional OpenTelemetry integration.
-Logwood's example, benchmark, and experimental scoped module are excluded.
+Logwood's example, benchmark, and optional scoped module are excluded.
 Jackson core is used only by Logwood tests and is absent from its runtime total.
 
 Published dependency declarations:

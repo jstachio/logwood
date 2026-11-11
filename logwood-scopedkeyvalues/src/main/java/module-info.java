@@ -1,5 +1,5 @@
 /**
- * Experimental ScopedValue storage for Rainbow Gum 0.17.2 ScopedKeyValues.
+ * ScopedValue storage for Rainbow Gum 0.17.2 ScopedKeyValues.
  * Requires Java 25. No Rainbow Gum backend or SLF4J facade is initialized.
  * Context is contributed automatically through LogwoodService, independently of configuration.
  */

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd -- "$project_dir"
+exec "${JAVA_HOME:?Set JAVA_HOME to JDK 27 or newer}/bin/java" \
+  bin/src/main/java/io/jstach/script/VersionHelper.java "$@"

@@ -1,0 +1,7 @@
+# Logwood _VERSION_
+
+> A modern slf4j-simple replacement for SLF4J 2 and System.Logger, with a path to Rainbow Gum.
+
+- [User guide](overview.md): configuration, LTSV, JSONL, SPI, MDC, scoped values, and migration.
+- [API and aggregate guide](index.html): the rendered guide and public API documentation.
+- [Source](https://github.com/jstachio/logwood): Java 21 core; Java 25 scoped values.

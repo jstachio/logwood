@@ -1,6 +1,6 @@
 {
   "date": "2026-11-11",
-  "logwoodBuild": "Amazon Corretto 21.0.13, --release 21, debug:none; normal Maven JARs",
+  "logwoodBuild": "OpenJDK 27+35, javac --release 21, debug:none; normal Maven JARs",
   "runtimeExcludes": [
     "slf4j-api",
     "test dependencies",
@@ -8,23 +8,9 @@
     "unselected optional dependencies",
     "example",
     "benchmark",
-    "experimental scoped module"
+    "optional scoped module"
   ],
   "artifacts": {
-    "io.jstach.logwood:logwood:0.1.0-SNAPSHOT": {
-      "coordinate": "io.jstach.logwood:logwood:0.1.0-SNAPSHOT",
-      "jar": "logwood-0.1.0-SNAPSHOT.jar",
-      "bytes": 22857,
-      "classFiles": 14,
-      "sha256": "f9350e6a878e7aaa54f570cb309ee6ebfd831597c5c0c7216e0e08e7003cb868"
-    },
-    "io.jstach.logwood:logwood-slf4j:0.1.0-SNAPSHOT": {
-      "coordinate": "io.jstach.logwood:logwood-slf4j:0.1.0-SNAPSHOT",
-      "jar": "logwood-slf4j-0.1.0-SNAPSHOT.jar",
-      "bytes": 2254,
-      "classFiles": 3,
-      "sha256": "2c472b22d14a24dcd11993a18f93066653e6ea58e236789e3b93fac558d8b53c"
-    },
     "org.jspecify:jspecify:1.0.0": {
       "coordinate": "org.jspecify:jspecify:1.0.0",
       "jar": "jspecify-1.0.0.jar",
@@ -73,14 +59,28 @@
       "bytes": 6037,
       "classFiles": 3,
       "sha256": "3097d0bfd8cde56086aba0bcf876b2435c1887a2d1262335021272e066570235"
+    },
+    "io.jstach.logwood:logwood:1.1.0-SNAPSHOT": {
+      "coordinate": "io.jstach.logwood:logwood:1.1.0-SNAPSHOT",
+      "jar": "logwood-1.1.0-SNAPSHOT.jar",
+      "bytes": 22857,
+      "classFiles": 14,
+      "sha256": "527b7ccbb1fb5d4ef123a6ad172ed82a033505d3979e39ccf2d89dfc732f1c26"
+    },
+    "io.jstach.logwood:logwood-slf4j:1.1.0-SNAPSHOT": {
+      "coordinate": "io.jstach.logwood:logwood-slf4j:1.1.0-SNAPSHOT",
+      "jar": "logwood-slf4j-1.1.0-SNAPSHOT.jar",
+      "bytes": 2253,
+      "classFiles": 3,
+      "sha256": "fd1d502b30a2d1f28dde82229725de5afb512851f21cf91c9298f6702070a1ad"
     }
   },
   "runtimeSets": {
     "Logwood": {
-      "bytes": 28930,
+      "bytes": 28929,
       "artifacts": [
-        "io.jstach.logwood:logwood:0.1.0-SNAPSHOT",
-        "io.jstach.logwood:logwood-slf4j:0.1.0-SNAPSHOT",
+        "io.jstach.logwood:logwood:1.1.0-SNAPSHOT",
+        "io.jstach.logwood:logwood-slf4j:1.1.0-SNAPSHOT",
         "org.jspecify:jspecify:1.0.0"
       ]
     },

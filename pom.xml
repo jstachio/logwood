@@ -1,8 +1,8 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project child.project.url.inherit.append.path="false" xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.jstach.logwood</groupId>
   <artifactId>logwood-parent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>Logwood Parent</name>
   <modules>
@@ -13,6 +13,23 @@
   </modules>
   <description>A small, defensive LTSV and JSON Lines backend for SLF4J and System.Logger.</description>
   <url>https://github.com/jstachio/logwood</url>
+  <organization>
+    <name>JStachio</name>
+    <url>https://jstach.io/</url>
+  </organization>
+  <developers>
+    <developer>
+      <id>agentgt</id>
+      <name>Adam Gent</name>
+      <url>https://github.com/agentgt</url>
+    </developer>
+  </developers>
+  <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
+    <connection>scm:git:https://github.com/jstachio/logwood.git</connection>
+    <developerConnection>scm:git:git@github.com:jstachio/logwood.git</developerConnection>
+    <url>https://github.com/jstachio/logwood/tree/main</url>
+    <tag>HEAD</tag>
+  </scm>
   <licenses>
     <license>
       <name>Zero-Clause BSD</name>
@@ -20,13 +37,16 @@
     </license>
   </licenses>
   <properties>
+    <build.java.version>27</build.java.version>
     <maven.compiler.release>21</maven.compiler.release>
+    <test.java.home>${java.home}</test.java.home>
+    <maven.deploy.skip>false</maven.deploy.skip>
     <maven.compiler.debuglevel>none</maven.compiler.debuglevel>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.build.outputTimestamp>2026-11-09T00:00:00Z</project.build.outputTimestamp>
     <slf4j.version>2.0.20</slf4j.version>
     <jspecify.version>1.0.0</jspecify.version>
-    <error-prone.version>2.50.0</error-prone.version>
+    <error-prone.version>2.52.0</error-prone.version>
     <nullaway.version>0.14.2</nullaway.version>
   </properties>
   <dependencyManagement>
@@ -76,6 +96,15 @@
     </dependency>
   </dependencies>
   <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>versions-maven-plugin</artifactId>
+          <version>2.25.1</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
     <resources>
       <resource>
         <directory>src/main/resources</directory>
@@ -94,6 +123,9 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.16.0</version>
         <configuration>
+          <compilerId>javac</compilerId>
+          <fork>true</fork>
+          <executable>${java.home}/bin/javac</executable>
           <debug>true</debug>
           <debuglevel>${maven.compiler.debuglevel}</debuglevel>
           <createMissingPackageInfoClass>false</createMissingPackageInfoClass>
@@ -108,6 +140,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.6.0</version>
+        <configuration>
+          <jvm>${test.java.home}/bin/java</jvm>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -127,8 +162,48 @@
         <artifactId>maven-javadoc-plugin</artifactId>
         <version>3.12.0</version>
         <configuration>
+          <javadocExecutable>${java.home}/bin/javadoc</javadocExecutable>
           <doclint>all,-missing</doclint>
+          <failOnWarnings>true</failOnWarnings>
+          <show>public</show>
         </configuration>
+        <executions>
+          <execution>
+            <id>javadoc-jar</id>
+            <goals><goal>jar</goal></goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.6.3</version>
+        <executions>
+          <execution>
+            <id>build-jdk</id>
+            <goals><goal>enforce</goal></goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[${build.java.version},)</version>
+                  <message>Build Logwood with JDK 27 or newer. Core artifacts still target Java 21.</message>
+                </requireJavaVersion>
+                <requireMavenVersion><version>[3.9.16,)</version></requireMavenVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <version>3.4.0</version>
+        <executions>
+          <execution>
+            <id>sources</id>
+            <goals><goal>jar-no-fork</goal></goals>
+          </execution>
+        </executions>
       </plugin>
       <plugin>
         <groupId>io.spring.javaformat</groupId>
@@ -147,6 +222,152 @@
     </plugins>
   </build>
   <profiles>
+    <profile>
+      <id>central</id>
+      <activation><property><name>deploy</name><value>release</value></property></activation>
+      <properties><central.skipUpload>false</central.skipUpload></properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-enforcer-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>release-versions</id>
+                <goals><goal>enforce</goal></goals>
+                <configuration>
+                  <rules>
+                    <requireReleaseVersion/>
+                    <requireReleaseDeps/>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals><goal>sign</goal></goals>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.12.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>false</autoPublish>
+              <skipUpload>${central.skipUpload}</skipUpload>
+              <skipPublishing>${maven.deploy.skip}</skipPublishing>
+              <excludeArtifacts>
+                <excludeArtifact>logwood-example</excludeArtifact>
+                <excludeArtifact>logwood-bench</excludeArtifact>
+                <excludeArtifact>logwood-bin</excludeArtifact>
+              </excludeArtifacts>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>doc</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>aggregate</id>
+                <inherited>false</inherited>
+                <phase>package</phase>
+                <goals><goal>aggregate</goal></goals>
+                <configuration>
+                  <overview>${maven.multiModuleProjectDirectory}/doc/overview.md</overview>
+                  <release>${build.java.version}</release>
+                  <doctitle>Logwood ${project.version}</doctitle>
+                  <windowtitle>Logwood ${project.version}</windowtitle>
+                  <linksource>true</linksource>
+                  <skippedModules>logwood-example,logwood-bench,logwood-bin</skippedModules>
+                  <additionalOptions>
+                    <additionalOption>--add-stylesheet ${maven.multiModuleProjectDirectory}/doc/logwood.css</additionalOption>
+                  </additionalOptions>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>3.5.0</version>
+            <executions>
+              <execution>
+                <id>doc-resources</id>
+                <inherited>false</inherited>
+                <phase>package</phase>
+                <goals><goal>copy-resources</goal></goals>
+                <configuration>
+                  <outputDirectory>${project.build.directory}/reports/apidocs</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>doc</directory>
+                      <includes>
+                        <include>resources/**</include>
+                        <include>overview.md</include>
+                        <include>llms.txt</include>
+                        <include>.nojekyll</include>
+                      </includes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>exec-maven-plugin</artifactId>
+            <version>3.6.4</version>
+            <executions>
+              <execution>
+                <id>doc-badge</id>
+                <inherited>false</inherited>
+                <phase>package</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <executable>${java.home}/bin/java</executable>
+                  <arguments>
+                    <argument>bin/src/main/java/io/jstach/script/DocBadge.java</argument>
+                    <argument>${project.build.directory}/reports/apidocs/badge.svg</argument>
+                    <argument>${project.version}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+              <execution>
+                <id>javadoc-javascript</id>
+                <inherited>false</inherited>
+                <phase>package</phase>
+                <goals><goal>exec</goal></goals>
+                <configuration>
+                  <executable>${java.home}/bin/java</executable>
+                  <arguments>
+                    <argument>bin/src/main/java/io/jstach/script/JavadocJavascript.java</argument>
+                    <argument>${project.build.directory}/reports/apidocs</argument>
+                    <argument>${project.version}</argument>
+                  </arguments>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
     <profile>
       <id>scoped-key-values</id>
       <activation>

@@ -1,0 +1,694 @@
+/* Adapted from Rainbow Gum. See bin/LICENSE for its BSD-3-Clause license. */
+package io.jstach.script;
+
+import static java.lang.System.out;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.LineNumberReader;
+import java.io.OutputStream;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Stream;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+
+/**
+ * Version Helper (vh) is to help manage versions on git tags, poms, and properties as
+ * well as manage timestamps. It replaces a lot of functionality that the Maven release
+ * plugin would do.
+ *
+ * It should be run in the project root like:
+ *
+ * <code>
+ * bin/vh [COMMAND]
+ * </code>
+ *
+ * @author agentgt
+ *
+ */
+public final class VersionHelper {
+
+	public static void main(String[] args) {
+		try {
+			run(List.of(args));
+		}
+		catch (Exception e) {
+			System.err.println(e.getMessage());
+			e.printStackTrace();
+			System.exit(1);
+		}
+
+	}
+
+	static void run(List<String> _args) throws Exception {
+		Command command = Command.parseCommand(Command.class, _args, 0);
+		List<String> params = _args.stream().skip(1).toList();
+		command.run(params);
+	}
+
+}
+
+interface HelpSupport {
+
+	String desc();
+
+}
+
+enum Command implements HelpSupport {
+
+	RELEASE("Validates and prepares the enviroment for release by tagging based on version.properties") {
+		@Override
+		public void run(List<String> args) throws IOException {
+			out.println("Validate Git");
+			validateGit();
+			var current = current();
+			long timestamp = timestamp();
+			var pom = pom();
+			out.println("Validating POM version");
+			validatePom(pom, current);
+			out.println("Tagging");
+			tag(current);
+			out.println("Setting POM to release version and updating timestamp");
+			pom(current, timestamp);
+			out.println("Ready to release. Do not forget to push tags!");
+			out.println("Now manually run:");
+			out.println("./mvnw clean deploy -Duser.timezone=UTC -Ddeploy=release \\");
+			out.println("&& git restore --source=HEAD -- pom.xml ':(glob)**/pom.xml' \\");
+			out.println("&& git push --follow-tags origin main");
+		}
+	},
+	CURRENT("Prints the current version based on version.properties.") {
+		@Override
+		public void run(List<String> args) throws IOException {
+			var version = current();
+			out.println(version.print());
+		}
+	},
+	VALIDATE("Validates that version.properties, git tag, and pom are specified correctly.") {
+		@Override
+		public void run(List<String> args) throws IOException {
+			validate(current(), tag(), pom());
+		}
+	},
+	PARSE("Parses a version: 'parse <VERSION>'") {
+		@Override
+		public void run(List<String> args) throws IOException {
+			var a = Version.of(args.get(0));
+			out.println(a.print());
+		}
+	},
+	GET("Gets a version string from a source: 'get <SOURCE>'") {
+		@Override
+		public void run(List<String> args) throws IOException {
+			VersionSource getCmd = Command.parseCommand(VersionSource.class, args, 0, this);
+			switch (getCmd) {
+				case CURRENT -> {
+					var version = current();
+					out.println(version.print());
+				}
+				case POM -> {
+					var v = pom();
+					out.println(v.label());
+				}
+				case TAG -> {
+					var v = tag();
+					out.println(v.label());
+				}
+			}
+
+		}
+	},
+	SET("Sets a version string on a source: 'set <SOURCE>'") {
+		@Override
+		public void run(List<String> args) throws IOException {
+			VersionSource setCmd = Command.parseCommand(VersionSource.class, args, 0, this);
+			List<String> params = args.stream().skip(1).toList();
+			Version v;
+			long timestamp;
+			if (params.isEmpty()) {
+				v = current();
+				timestamp = timestamp();
+			}
+			else {
+				v = Version.of(params.get(0));
+				timestamp = java.time.Instant.now().getEpochSecond();
+			}
+			switch (setCmd) {
+				case CURRENT -> {
+					current(v, timestamp);
+				}
+				case POM -> {
+					pom(v, timestamp);
+				}
+				case TAG -> {
+					tag(v);
+				}
+			}
+		}
+
+	};
+
+	public static final String VERSION_PROPERTIES = "version.properties";
+
+	/**
+	 * Extra, out-of-reactor project directories: each has its own {@code pom.xml} with a
+	 * {@code <parent>} pointing back at this project's parent pom, but is not reachable
+	 * via any {@code <module>} in the main reactor (usually because it needs its own
+	 * special build setup, e.g. a GraalVM native-image or JDK AOT cache smoke test), so a
+	 * plain {@code ./mvnw versions:set -DgenerateBackupPoms=false} run from the project
+	 * root never touches it. Edit this list for whichever directories apply when copying
+	 * this script to a different project; leave it {@code List.of()} if there are none.
+	 */
+	public static final List<String> EXTRA_POM_DIRECTORIES = List.of("bin");
+
+	/**
+	 * Project directories whose {@code pom.xml} declares this project's version in a
+	 * {@value #VERSION_POM_PROPERTY} property instead of inheriting it, because they are
+	 * written like an application using the project (for example an example app with its
+	 * own framework parent). {@code ./mvnw versions:set -DgenerateBackupPoms=false} does
+	 * not update properties, so it is rewritten directly, along with the pom's own
+	 * {@code <version>}, which matches the project version so reactor builds do not print
+	 * a version per module. Leave it {@code List.of()} if there are none.
+	 */
+	public static final List<String> VERSION_PROPERTY_POM_DIRECTORIES = List.of();
+
+	/**
+	 * The property {@link #VERSION_PROPERTY_POM_DIRECTORIES} poms declare the version in.
+	 */
+	public static final String VERSION_POM_PROPERTY = "logwood.version";
+
+	private final String desc;
+
+	Command(String desc) {
+		this.desc = desc;
+	}
+
+	public String desc() {
+		return this.desc;
+	}
+
+	public abstract void run(List<String> args) throws IOException;
+
+	enum VersionSource implements HelpSupport {
+
+		CURRENT(VERSION_PROPERTIES), POM("pom.xml"), TAG("git tag");
+
+		private final String desc;
+
+		VersionSource(String desc) {
+			this.desc = desc;
+		}
+
+		public String desc() {
+			return this.desc;
+		}
+
+	}
+
+	static void validate(Version current, Version tag, Version pom) throws IOException {
+
+		if (!tag.equals(current)) {
+			throw new RuntimeException("version mismatch. current = " + current.print() + " tag = " + tag.print());
+		}
+		validatePom(pom, current);
+	}
+
+	static void validatePom(Version pom, Version current) {
+		if (pom.compareTo(current) <= 0) {
+			throw new RuntimeException("pom version is not greater than current version.properties. current = "
+					+ current.print() + " pom = " + pom);
+		}
+		if (!pom.snapshot()) {
+			throw new RuntimeException("pom should be a -SNAPSHOT version");
+		}
+	}
+
+	static Version current() throws IOException {
+		var props = new Properties();
+		try (var r = Files.newBufferedReader(Path.of(VERSION_PROPERTIES))) {
+			props.load(r);
+		}
+		String v = props.getProperty("version");
+		return Version.of(v);
+	}
+
+	static void current(Version v, long timestamp) throws IOException {
+		if (v.snapshot()) {
+			throw new IllegalArgumentException("version.properties cannot have SNAPSHOT versions. version: "
+					+ v.print(Version.PrintFlag.SNAPSHOT));
+		}
+		try (var br = Files.newBufferedWriter(Path.of(VERSION_PROPERTIES), StandardCharsets.ISO_8859_1)) {
+			writeProperties(br, Map.entry("version", v.print()), Map.entry("timestamp", "" + timestamp));
+			br.flush();
+		}
+	}
+
+	static long timestamp() throws IOException {
+		var props = new Properties();
+		try (var r = Files.newBufferedReader(Path.of(VERSION_PROPERTIES))) {
+			props.load(r);
+		}
+		String t = props.getProperty("timestamp");
+		if (t == null) {
+			return -1;
+		}
+		return Long.parseLong(t);
+	}
+
+	static Version pom() throws IOException {
+		String command = "./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout";
+		String r = execute(command, 1).trim();
+		return Version.of(r);
+	}
+
+	static void pom(Version current, long timestamp) throws IOException {
+		run("./mvnw versions:set -DgenerateBackupPoms=false -DnewVersion=" + current.print(Version.PrintFlag.SNAPSHOT));
+		for (String dir : EXTRA_POM_DIRECTORIES) {
+			updateParentVersion(Path.of(dir, "pom.xml"), current);
+		}
+		for (String dir : VERSION_PROPERTY_POM_DIRECTORIES) {
+			updatePomProperty(Path.of(dir, "pom.xml"), VERSION_POM_PROPERTY, current);
+			updateProjectVersion(Path.of(dir, "pom.xml"), current);
+		}
+		updateTimestamp(timestamp);
+
+	}
+
+	/**
+	 * Directly rewrites a detached (non-reactor) pom's {@code <parent><version>} via
+	 * DOM/XPath, the same way {@link #updateTimestamp(long)} rewrites the root pom's
+	 * timestamp -
+	 * {@code ./mvnw versions:set -DgenerateBackupPoms=false}/{@code versions:update-parent}
+	 * both assume the target is resolvable in the usual reactor/repository sense, which a
+	 * detached pom (see {@link #EXTRA_POM_DIRECTORIES}) is not guaranteed to be at this
+	 * point in the release process.
+	 * @param pomFile path to the detached project's pom.xml.
+	 * @param version new parent version to write.
+	 */
+	static void updateParentVersion(Path pomFile, Version version) throws IOException {
+		try {
+			Document doc;
+			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			try (InputStream is = Files.newInputStream(pomFile, StandardOpenOption.READ)) {
+				doc = builder.parse(is);
+				XPath xpath = XPathFactory.newInstance().newXPath();
+				String path = "/project/parent/version";
+				Node v = (Node) xpath.evaluate(path, doc, XPathConstants.NODE);
+				if (v == null) {
+					throw new IllegalStateException("No " + path + " found in " + pomFile);
+				}
+				v.setTextContent(version.print(Version.PrintFlag.SNAPSHOT));
+			}
+			try (OutputStream os = Files.newOutputStream(pomFile, StandardOpenOption.WRITE,
+					StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC)) {
+				DOMSource domSource = new DOMSource(doc);
+				StreamResult result = new StreamResult(os);
+				TransformerFactory tf = TransformerFactory.newInstance();
+				Transformer transformer = tf.newTransformer();
+				transformer.transform(domSource, result);
+			}
+		}
+		catch (IOException e) {
+			throw e;
+		}
+		catch (Exception e) {
+			throw new IOException(e);
+		}
+	}
+
+	/**
+	 * Rewrites the single {@code <name>value</name>} element of a pom property as text,
+	 * leaving the rest of the file byte for byte unchanged.
+	 * @param pomFile path to the pom.xml.
+	 * @param name property name.
+	 * @param version new value.
+	 */
+	static void updatePomProperty(Path pomFile, String name, Version version) throws IOException {
+		String content = Files.readString(pomFile, StandardCharsets.UTF_8);
+		var matcher = Pattern.compile("<" + Pattern.quote(name) + ">[^<]*</" + Pattern.quote(name) + ">")
+			.matcher(content);
+		if (!matcher.find()) {
+			throw new IllegalStateException("No <" + name + "> property found in " + pomFile);
+		}
+		int start = matcher.start();
+		int end = matcher.end();
+		if (matcher.find()) {
+			throw new IllegalStateException("More than one <" + name + "> property found in " + pomFile);
+		}
+		String updated = content.substring(0, start) + "<" + name + ">" + version.print(Version.PrintFlag.SNAPSHOT)
+				+ "</" + name + ">" + content.substring(end);
+		Files.writeString(pomFile, updated, StandardCharsets.UTF_8);
+	}
+
+	/**
+	 * Rewrites a pom's own {@code <version>}, the first one outside its {@code <parent>},
+	 * as text, leaving the rest of the file byte for byte unchanged.
+	 * @param pomFile path to the pom.xml.
+	 * @param version new value.
+	 */
+	static void updateProjectVersion(Path pomFile, Version version) throws IOException {
+		String content = Files.readString(pomFile, StandardCharsets.UTF_8);
+		int parentStart = content.indexOf("<parent>");
+		int parentEnd = parentStart < 0 ? -1 : content.indexOf("</parent>", parentStart);
+		var matcher = Pattern.compile("<version>[^<]*</version>").matcher(content);
+		while (matcher.find()) {
+			if (parentStart >= 0 && matcher.start() > parentStart && matcher.start() < parentEnd) {
+				continue;
+			}
+			String updated = content.substring(0, matcher.start()) + "<version>"
+					+ version.print(Version.PrintFlag.SNAPSHOT) + "</version>" + content.substring(matcher.end());
+			Files.writeString(pomFile, updated, StandardCharsets.UTF_8);
+			return;
+		}
+		throw new IllegalStateException("No project <version> found in " + pomFile);
+	}
+
+	static Version tag() throws IOException {
+		String r = execute("git tag -l --sort=-v:refname", 1);
+		var v = Version.of(r.trim());
+		return v;
+	}
+
+	static void tag(Version version) throws IOException {
+		if (version.snapshot()) {
+			throw new IllegalArgumentException(
+					"tag cannot have SNAPSHOT versions. version: " + version.print(Version.PrintFlag.SNAPSHOT));
+		}
+		String command = "git tag -a -m 'release " + version.print() + "'" + " v" + version.print();
+		out.println("Executing " + command);
+		String r = execute(command, -1);
+		out.println(version);
+		out.println(r);
+	}
+
+	static void validateGit() throws IOException {
+		String command = "git status --porcelain=v1 2>/dev/null";
+		String r = execute(command, -1);
+		if (!r.trim().isBlank()) {
+			throw new RuntimeException("Git has changed files: \n" + r);
+		}
+	}
+
+	static String execute(String command) throws IOException {
+		return execute(command, -1);
+	}
+
+	static void run(String command) throws IOException {
+		int e = execute(command, System.out, System.err, -1);
+		if (e != 0) {
+			System.exit(e);
+		}
+	}
+
+	static String execute(String command, int lines) throws IOException {
+		StringBuilder out = new StringBuilder();
+		StringBuilder err = new StringBuilder();
+		int e = execute(command, out, err, lines);
+		if (e == 0) {
+			return out.toString();
+		}
+		else {
+			throw new IOException("Failure executing command: " + command + ", exit: " + e + "\nstdout: "
+					+ out.toString() + "\nstderr: " + err.toString());
+		}
+	}
+
+	static int execute(String command, Appendable out, Appendable err, int lines) throws IOException {
+		// Maven can fill a pipe before exiting; drain to temporary files rather than
+		// waiting for a child whose output pipe is blocked.
+		Path stdout = Files.createTempFile("logwood-vh-out-", ".log");
+		Path stderr = Files.createTempFile("logwood-vh-err-", ".log");
+		try {
+			Process process = new ProcessBuilder("bash", "-c", command).redirectOutput(stdout.toFile())
+				.redirectError(stderr.toFile())
+				.start();
+			try {
+				int exit = process.waitFor();
+				try (var output = Files.newBufferedReader(stdout); var error = Files.newBufferedReader(stderr)) {
+					append(out, output, lines < 0 ? Integer.MAX_VALUE : lines);
+					append(err, error, Integer.MAX_VALUE);
+				}
+				return exit;
+			}
+			catch (InterruptedException e) {
+				process.destroyForcibly();
+				Thread.currentThread().interrupt();
+				throw new IOException("Interrupted while running " + command, e);
+			}
+		}
+		finally {
+			Files.deleteIfExists(stdout);
+			Files.deleteIfExists(stderr);
+		}
+	}
+
+	private static void append(Appendable output, BufferedReader reader, int lines) throws IOException {
+		String line;
+		int i = 0;
+		while ((line = reader.readLine()) != null) {
+			if (i >= lines) {
+				break;
+			}
+			output.append(line + "\n");
+			i++;
+		}
+	}
+
+	public static <E extends Enum<E> & HelpSupport> E parseCommand(Class<E> commandType, List<String> args, int index) {
+		return parseCommand(commandType, args, index, null);
+	}
+
+	public static <E extends Enum<E> & HelpSupport, P extends Enum<P> & HelpSupport> E parseCommand(
+			Class<E> commandType, List<String> args, int index, P parent) {
+		if (args.size() < (index + 1)) {
+			String message;
+			if (parent != null) {
+				message = "Missing subcommand for '" + parent.name().toLowerCase() + "'. pick: ";
+			}
+			else {
+				message = "Missing command. pick: ";
+			}
+			message = message + printCommands(commandType);
+			throw new RuntimeException(message);
+		}
+		String arg = args.get(index);
+
+		try {
+			if (arg.equalsIgnoreCase("help")) {
+				out.println("");
+
+				String message;
+				if (parent != null) {
+					out.println(parent.desc());
+					out.println();
+					message = "Sub Commands for '" + parent.name().toLowerCase() + "': ";
+				}
+				else {
+					out.println("""
+							Version Helper (vh) is to help manage versions on git tags, poms, and properties
+							as well as manage timestamps. It replaces a lot of functionality that the
+							Maven release plugin would do.
+
+							It should be run in the project root like:
+
+								bin/vh [COMMAND]
+
+							""");
+					message = "Commands: ";
+				}
+				out.println(message + printCommands(commandType));
+				out.println(helpCommands(commandType));
+				System.exit(0);
+				throw new RuntimeException();
+			}
+			return Enum.valueOf(commandType, arg.toUpperCase());
+
+		}
+		catch (Exception exception) {
+			String message = "Bad command. " + arg + " pick: " + printCommands(commandType);
+			throw new RuntimeException(message);
+		}
+	}
+
+	public static <E extends Enum<E>> String printCommands(Class<E> commandType) {
+		return ""
+				+ Stream.concat(Stream.of("help"), EnumSet.allOf(commandType).stream().map(e -> e.name().toLowerCase()))
+					.toList();
+	}
+
+	public static <E extends Enum<E> & HelpSupport> String helpCommands(Class<E> commandType) {
+		StringBuilder sb = new StringBuilder();
+		for (var e : EnumSet.allOf(commandType)) {
+			sb.append("\n\t");
+			sb.append(e.name().toLowerCase()).append(" - ").append(e.desc());
+		}
+		sb.append("\n\t");
+		sb.append("help - describe commands: '[<COMMAND>] help'");
+		sb.append("\n");
+		return sb.toString();
+	}
+
+	@SafeVarargs
+	static void writeProperties(Appendable sb, Entry<String, String>... kvs) throws IOException {
+		Map<String, String> m = new LinkedHashMap<>();
+		for (var kv : kvs) {
+			m.put(kv.getKey(), kv.getValue());
+		}
+		writeProperties(m, sb);
+	}
+
+	@SuppressWarnings({ "unchecked", "rawtypes", "serial" })
+	static void writeProperties(Map<String, String> map, Appendable sb) throws IOException {
+		StringWriter sw = new StringWriter();
+		new Properties() {
+			public java.util.Enumeration keys() {
+				return Collections.enumeration(map.keySet());
+			}
+
+			public java.util.Set entrySet() {
+				return map.entrySet();
+			};
+
+			public Object get(Object key) {
+				return map.get(key);
+			};
+		}.store(sw, null);
+		LineNumberReader lr = new LineNumberReader(new StringReader(sw.toString()));
+
+		String line;
+		while ((line = lr.readLine()) != null) {
+			if (!line.startsWith("#")) {
+				sb.append(line).append("\n");
+				out.append(line).append("\n");
+			}
+		}
+	}
+
+	static void updateTimestamp(long timestamp) throws IOException {
+		try {
+			Document doc;
+			DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+			DocumentBuilder builder = factory.newDocumentBuilder();
+			try (InputStream is = Files.newInputStream(Path.of("pom.xml"), StandardOpenOption.READ)) {
+
+				doc = builder.parse(is);
+				XPath xpath = XPathFactory.newInstance().newXPath();
+				String path = "/project/properties/project.build.outputTimestamp";
+				Node v = (Node) xpath.evaluate(path, doc, XPathConstants.NODE);
+				v.setTextContent("" + timestamp);
+			}
+			try (OutputStream os = Files.newOutputStream(Path.of("pom.xml"), StandardOpenOption.WRITE,
+					StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.SYNC)) {
+				DOMSource domSource = new DOMSource(doc);
+				StreamResult result = new StreamResult(os);
+				TransformerFactory tf = TransformerFactory.newInstance();
+				Transformer transformer = tf.newTransformer();
+				transformer.transform(domSource, result);
+			}
+		}
+		catch (Exception e) {
+			throw new IOException(e);
+		}
+	}
+
+}
+
+record Version(int major, int minor, int patch, boolean snapshot) implements Comparable<Version> {
+
+	static final Pattern pattern = Pattern.compile("v?([0-9]+)\\.([0-9]+)\\.([0-9]+)(-SNAPSHOT)?");
+	static final Comparator<Version> COMPARATOR = Comparator.comparingInt(Version::major)
+		.thenComparingInt(Version::minor)
+		.thenComparingInt(Version::patch)
+		.thenComparing(v -> !v.snapshot());
+
+	static Version of(String s) {
+		Matcher m = pattern.matcher(s);
+		if (!m.matches()) {
+			throw new IllegalArgumentException("bad version: " + s);
+		}
+		int major = Integer.parseInt(m.group(1));
+		int minor = Integer.parseInt(m.group(2));
+		int patch = Integer.parseInt(m.group(3));
+		boolean snapshot = false;
+		if (m.groupCount() > 3 && "-SNAPSHOT".equals(m.group(4))) {
+			snapshot = true;
+		}
+		return new Version(major, minor, patch, snapshot);
+	}
+
+	enum PrintFlag {
+
+		PREFIX, SNAPSHOT
+
+	}
+
+	public String print(Set<PrintFlag> flags) {
+		return (flags.contains(PrintFlag.PREFIX) ? "v" : "") + major() + "." + minor() + "." + patch()
+				+ (flags.contains(PrintFlag.SNAPSHOT) && snapshot ? "-SNAPSHOT" : "");
+	}
+
+	public String print() {
+		return print(Set.of());
+	}
+
+	public String print(PrintFlag flag, PrintFlag... flags) {
+		Set<PrintFlag> fs = EnumSet.of(flag, flags);
+		return print(fs);
+	}
+
+	public String label() {
+		return print(Set.of(PrintFlag.PREFIX, PrintFlag.SNAPSHOT));
+	}
+
+	public String tag() {
+		return "v" + print();
+	}
+
+	public String toString() {
+		return label();
+	}
+
+	void validate(Version b) {
+		if (this.equals(b)) {
+			out.println(b.print());
+		}
+		else {
+			throw new IllegalArgumentException("version mismatch. a = " + this.label() + " b = " + b.label());
+		}
+	}
+
+	@Override
+	public int compareTo(Version o) {
+		return COMPARATOR.compare(this, o);
+	}
+
+}
