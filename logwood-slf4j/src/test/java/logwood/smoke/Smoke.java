@@ -18,6 +18,38 @@ public final class Smoke {
 
 	public static void main(String[] args) throws Exception {
 		switch (args[0]) {
+			case "keyvalues-mode" -> {
+				CallbackValues.CONTEXT.set(Map.of("request", "context"));
+				try {
+					System.getLogger("system").log(Level.INFO, "system context");
+					LoggerFactory.getLogger("sample")
+						.atInfo()
+						.addKeyValue("request", "event")
+						.addKeyValue("level", "spoof")
+						.log("fluent context");
+				}
+				finally {
+					CallbackValues.CONTEXT.remove();
+				}
+			}
+			case "no-keyvalues" -> {
+				System.getLogger("system").log(Level.INFO, "safe system");
+				var logger = LoggerFactory.getLogger("sample");
+				logger.atInfo().addKeyValue("secret", new Object() {
+					@Override
+					public String toString() {
+						throw new AssertionError("disabled key-value rendered");
+					}
+				}).log("safe fluent");
+				var event = new org.slf4j.event.DefaultLoggingEvent(org.slf4j.event.Level.INFO, logger) {
+					@Override
+					public java.util.List<org.slf4j.event.KeyValuePair> getKeyValuePairs() {
+						throw new AssertionError("disabled key-value accessor called");
+					}
+				};
+				event.setMessage("safe event");
+				((org.slf4j.spi.LoggingEventAware) logger).log(event);
+			}
 			case "basic" -> {
 				LoggerFactory.getLogger("sample").info("hello {}", "world");
 				System.getLogger("system").log(Level.WARNING, "hello {0}", "world");
@@ -364,6 +396,23 @@ public final class Smoke {
 		@Override
 		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
 			consumer.accept("source", "direct");
+		}
+
+	}
+
+	public static final class DisabledValues extends KeyValuesProvider {
+
+		public DisabledValues() {
+		}
+
+		@Override
+		public int order() {
+			throw new AssertionError("disabled context ordering called");
+		}
+
+		@Override
+		public void keyValues(BiConsumer<@Nullable String, @Nullable String> consumer) {
+			throw new AssertionError("disabled context provider called");
 		}
 
 	}

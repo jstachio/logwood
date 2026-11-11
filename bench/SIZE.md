@@ -7,7 +7,7 @@ normal descriptors and resources. This comparison measures size, not speed.
 
 | Implementation | Provider JARs | Required runtime JARs, excluding SLF4J API |
 | --- | ---: | ---: |
-| Logwood core + SLF4J module | 25,110 bytes (24.52 KiB) | 28,929 bytes (28.25 KiB) |
+| Logwood core + SLF4J module | 26,698 bytes (26.07 KiB) | 30,517 bytes (29.80 KiB) |
 | Avaje Simple JSON Logger 2.0 | 49,832 bytes (48.66 KiB) | 180,520 bytes (176.29 KiB) |
 | Avaje Simple Logger 2.0 | 55,869 bytes (54.56 KiB) | 285,416 bytes (278.73 KiB) |
 

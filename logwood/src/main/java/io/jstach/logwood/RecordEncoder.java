@@ -12,6 +12,8 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.util.Date;
 import java.util.Locale;
 import io.jstach.logwood.spi.LogwoodService.KeyValuesProvider;
+import io.jstach.logwood.spi.LogwoodService.KeyValuesMode;
+import java.util.Set;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -22,6 +24,9 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 
 	private static final int CONTENT = RECORD - 32;
 
+	private static final Set<String> RESERVED = Set.of("time", "level", "logger", "message", "thread", "threadId",
+			"threadName", "error", "stacktrace", "keyValues", "truncated");
+
 	private static final String HEX = "0123456789abcdef";
 
 	private static final DateTimeFormatter TIME = new DateTimeFormatterBuilder().appendInstant(3)
@@ -30,6 +35,8 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	private final StringBuilder out = new StringBuilder(128);
 
 	private final boolean json;
+
+	private final KeyValuesMode keyValuesMode;
 
 	private boolean quoted;
 
@@ -42,7 +49,12 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	boolean truncated;
 
 	RecordEncoder(int priority, boolean json) {
+		this(priority, json, KeyValuesMode.FLAT);
+	}
+
+	RecordEncoder(int priority, boolean json, KeyValuesMode keyValuesMode) {
 		this.json = json;
+		this.keyValuesMode = keyValuesMode;
 		if (priority >= 0)
 			out.append('<').append(priority).append('>');
 		if (json)
@@ -384,6 +396,8 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	}
 
 	void keyValues(KeyValuesProvider provider) {
+		if (keyValuesMode == KeyValuesMode.NONE)
+			return;
 		collecting = true;
 		try {
 			provider.keyValues(this);
@@ -404,6 +418,8 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	}
 
 	private void put(@Nullable String key, @Nullable Object value, int limit) {
+		if (keyValuesMode == KeyValuesMode.NONE)
+			return;
 		if (key == null || key.length() > KEY) {
 			truncated = true;
 			return;
@@ -425,15 +441,19 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 				truncated = true;
 				break;
 			}
-			extra("kv.", entry.getKey(), entry.getValue());
+			extra(entry.getKey(), entry.getValue());
 		}
 	}
 
-	void extra(String prefix, @Nullable String key, @Nullable Object value) {
+	void extra(@Nullable String key, @Nullable Object value) {
+		if (keyValuesMode == KeyValuesMode.NONE)
+			return;
 		if (key == null || key.length() > KEY) {
 			truncated = true;
 			return;
 		}
+		String prefix = keyValuesMode == KeyValuesMode.PREFIXED || RESERVED.contains(key)
+				|| key.startsWith("keyValues.") ? "keyValues." : "";
 		if (json) {
 			if (start(prefix + key, true, 0) && value != null)
 				object(value, 0);

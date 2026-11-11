@@ -56,8 +56,26 @@ public sealed interface LogwoodService permits LogwoodService.LogwoodConfig, Log
 		}
 
 		/**
-		 * Reads logging.level, logging.level.name, logging.journald, and logging.format;
-		 * null means absent.
+		 * Key-value output for both LTSV and JSONL, resolved once at initialization.
+		 * Reads {@code logging.keyvalues.mode}; absent means {@link KeyValuesMode#FLAT}.
+		 * Names are case-insensitive; {@code false} means none and {@code true} means
+		 * flat.
+		 * @return output mode.
+		 */
+		public KeyValuesMode keyValuesMode() {
+			String value = propertyOrNull("logging.keyvalues.mode");
+			if (value == null || value.equalsIgnoreCase("flat") || value.equalsIgnoreCase("true"))
+				return KeyValuesMode.FLAT;
+			if (value.equalsIgnoreCase("none") || value.equalsIgnoreCase("false"))
+				return KeyValuesMode.NONE;
+			if (value.equalsIgnoreCase("prefixed"))
+				return KeyValuesMode.PREFIXED;
+			throw new IllegalArgumentException("Invalid key-values mode");
+		}
+
+		/**
+		 * Reads logging.level, logging.level.name, logging.journald, logging.format, and
+		 * logging.keyvalues.mode; null means absent.
 		 */
 		public @Nullable String propertyOrNull(String key) {
 			return System.getProperty(key);
@@ -92,6 +110,20 @@ public sealed interface LogwoodService permits LogwoodService.LogwoodConfig, Log
 			}
 
 		}
+
+	}
+
+	/** How application key values are emitted; neither format creates a nested object. */
+	enum KeyValuesMode {
+
+		/** Omit key values without collecting provider data or rendering event values. */
+		NONE,
+
+		/** Keep ordinary keys bare and prefix reserved keys with {@code keyValues.}. */
+		FLAT,
+
+		/** Prefix every application key with {@code keyValues.}. */
+		PREFIXED
 
 	}
 

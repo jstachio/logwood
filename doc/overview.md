@@ -59,6 +59,8 @@ add the Rainbow Gum modules you need, with one SLF4J provider at a time.
 The optional scoped-values module implements Rainbow Gum 0.17.2's
 ScopedKeyValues API, so scoped-context calls use that API already.
 
+Key-value output defaults to bare keys with collision prefixes, matching Rainbow
+Gum's LTSV policy. Logwood additionally reserves its `truncated` marker.
 Configuration beyond logger levels needs review: the Java configuration SPI,
 format selection, field names, key prefixes, limits, and output setup are not
 identical. Choose Rainbow Gum when you need files and rolling archives,
@@ -199,6 +201,7 @@ The only built-in properties are:
 | `logging.level.com.example` | Threshold inherited by dotted descendants. |
 | `logging.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
 | `logging.format` | `ltsv` (default) or `jsonl`, case-insensitive. |
+| `logging.keyvalues.mode` | `none`/`false`, `flat`/`true` (default), or `prefixed`; case-insensitive. |
 
 ```sh
 java -Dlogging.level=WARN -Dlogging.level.com.example=DEBUG -Dlogging.journald=true ...
@@ -274,14 +277,16 @@ module my.app {
 `levelOrNull(name)` returns null to inherit, including the empty name for the
 root. Override it to replace property-based level selection. Key-value callbacks
 run synchronously and must not retain their consumer. All providers share the
-32-key context budget. Context and fluent fields share `kv.` labels; fluent
+32-key context budget. Context and fluent fields share one namespace; fluent
 fields have final precedence, the last event value wins, and each label is emitted
-once. A bounded temporary map is created only when fields exist. Logwood retains
+once. Flat output is the default; reserved keys receive `keyValues.`. Set
+`logging.keyvalues.mode=prefixed` to prefix every key or `none` to omit them.
+A bounded temporary map is created only when fields exist. Logwood retains
 no context map between records. Built-in metadata remains separate. LTSV labels
 use percent-encoded UTF-8, a `%` sentinel for the empty key, and a `%uXXXX`
 extension for unpaired UTF-16 surrogates. Literal percent signs become `%25`,
-keeping these forms distinct. JSON keeps the original keys after `kv.` and
-escapes JSON member names.
+keeping these forms distinct. JSON keeps the original keys after any added
+namespace and escapes JSON member names.
 
 Logwood's System.Logger path loads no SLF4J classes and never calls
 `LogwoodConfig.createMDCAdapter()`. The adapter is a JDK-only storage contract
@@ -345,7 +350,7 @@ ScopedKeyValues.builder().add("requestId", "r-123").run(() -> {
 });
 ```
 
-The record contains `kv.requestId:r-123`. Logwood discovers this contributor in its
+The record contains `requestId:r-123`. Logwood discovers this contributor in its
 single LogwoodService pass. The Rainbow Gum facade separately discovers its own
 required factory; both instances share the same ScopedValue storage.
 
@@ -359,7 +364,7 @@ ScopedKeyValues.builder().add("requestId", "r-123").run(() -> {
 });
 ```
 
-This emits only `kv.requestId:event-456` for that key.
+This emits only `requestId:event-456` for that key.
 
 ### Scope and merge rules
 
@@ -380,8 +385,9 @@ arbitrary new platform or virtual threads do not inherit them.
 Logwood reads the snapshot directly without a per-event scoped-map copy. The core
 uses a bounded temporary merge map only when fields exist, overlays fluent
 values, and encodes each label once. Overridden objects are not rendered.
-No context map is retained between records. All final labels use `kv.` and the
-usual defensive encoding; built-in metadata remains separate.
+No context map is retained between records. The selected key-values mode and
+usual defensive encoding apply; built-in metadata remains separate. With mode
+`none`, the backend does not read scoped context.
 
 Storage accepts at most **32 merged distinct keys**, **256 UTF-16 units per key**,
 and **4096 per value**. Overflow throws IllegalArgumentException without data,
@@ -408,7 +414,7 @@ and closing delimiters.
 Logwood retains no logger-name registry or marker state.
 The per-thread recursion guard holds only a Boolean, not a record buffer or context.
 
-The core has eleven types plus package and module descriptors; optional JPMS SLF4J
+The core has twelve types plus package and module descriptors; optional JPMS SLF4J
 registration adds one class and its descriptor. Runtime jars omit
 compiler debugging tables, Maven descriptors, and build-environment manifest fields. To build with source/line
 information for debugging:
@@ -484,20 +490,41 @@ message is the text `null`.
 
 ### Labels
 
-All context and fluent keys receive the `kv.` prefix, keeping them separate
-from built-in metadata. Encode the original key using these rules:
+`logging.keyvalues.mode` selects application key-value output in both formats:
 
-| Original key text | Encoded label after `kv.` |
+| Mode | Behavior |
+| --- | --- |
+| `none` / `false` | Omit all context and fluent fields; skip backend collection and rendering. |
+| `flat` / `true` | Default: keep ordinary keys bare; prefix collisions with `keyValues.`. |
+| `prefixed` | Prefix every application key with `keyValues.`. |
+
+Values are case-insensitive and resolved once at initialization. Invalid values
+disable logging with one fixed diagnostic. There is no nested-object option.
+`LogwoodConfig.keyValuesMode()` exposes the same choice as the
+`LogwoodService.KeyValuesMode` enum for programmatic configuration.
+
+Reserved names are `time`, `level`, `logger`, `message`, `thread`, `threadId`,
+`threadName`, `error`, `stacktrace`, `keyValues`, and `truncated`. Names starting
+with `keyValues.` also receive another prefix, preserving distinct original keys:
+`level` becomes `keyValues.level`, while `keyValues.level` becomes
+`keyValues.keyValues.level`. Collision protection applies even when an optional
+built-in field is absent. Prefixed JSON members remain dotted names; Logwood does
+not expand dots into objects.
+
+After choosing the namespace, encode the original key using these rules:
+
+| Original key text | Encoded key (before an optional namespace prefix) |
 | --- | --- |
 | ASCII `A-Z a-z 0-9 _ . -` | Unchanged |
 | Other valid Unicode | UTF-8 bytes, each written `%hh` with lowercase hex digits |
 | Empty key | `%` |
 | Unpaired UTF-16 surrogate | `%uXXXX` with four lowercase hex digits |
 
-Examples: `a b` becomes `kv.a%20b`, `:` becomes `kv.%3a`, `%` becomes
-`kv.%25`, `é` becomes `kv.%c3%a9`, and `😀` becomes `kv.%f0%9f%98%80`.
-An unpaired U+D800 becomes `kv.%ud800`; the literal text `%ud800` becomes
-`kv.%25ud800`. The empty key is `kv.%`, distinct from a literal percent key.
+In the default flat mode, `a b` becomes `a%20b`, `:` becomes `%3a`, `%` becomes
+`%25`, `é` becomes `%c3%a9`, and `😀` becomes `%f0%9f%98%80`.
+An unpaired U+D800 becomes `%ud800`; the literal text `%ud800` becomes
+`%25ud800`. The empty key is `%`, distinct from a literal percent key. Prefixed
+mode adds `keyValues.` to each result: for example `keyValues.a%20b`.
 The `%uXXXX` form is an extension for malformed UTF-16, not a UTF-8 byte
 escape. These encodings keep distinct keys distinct. Null keys are skipped
 and set the truncation marker.
@@ -506,8 +533,9 @@ and set the truncation marker.
 
 Separate records and fields **before** decoding escapes. Decode value
 backslash escapes in one pass; recursively decoding `\\n` would incorrectly
-turn literal escape text into a newline. For labels, first remove `kv.`, then
-handle the empty-key sentinel, `%uXXXX` code units, and UTF-8 percent bytes.
+turn literal escape text into a newline. For application labels, remove one
+leading `keyValues.` namespace if present, then handle the empty-key sentinel,
+`%uXXXX` code units, and UTF-8 percent bytes.
 Do not percent-decode a decoded result again: `%25ud800` is literal `%ud800`.
 This escaping is Logwood's convention layered on LTSV; a generic LTSV reader
 can split fields but needs these rules to recover original text.
@@ -515,8 +543,9 @@ can split fields but needs these rules to recover original text.
 An encoded value is limited to 4,096 UTF-16 code units and a complete record
 to 16,384, including the truncation marker and final LF. Escapes and valid
 surrogate pairs are never split at a limit. Keys are skipped whole if the
-raw key or encoded label (excluding `kv.`) exceeds 256 code units. Clipping
-adds `truncated:true`; clipped values cannot recover the omitted suffix.
+raw key or encoded label (excluding an added `keyValues.` namespace) exceeds
+256 code units. Clipping adds `truncated:true`; clipped values cannot recover
+the omitted suffix.
 See [the security model](https://github.com/jstachio/logwood/blob/main/SECURITY.md) for the remaining work and storage
 limits and failure behavior.
 

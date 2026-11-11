@@ -181,9 +181,46 @@ class RuntimeTest {
 		assertEquals(List.of("INFO", "WARN", "ERROR"), records.stream().map(r -> r.get("level")).toList());
 		assertEquals("hello world", records.get(0).get("message"));
 		assertEquals("hello world", records.get(1).get("message"));
-		assertEquals("spoof", records.get(2).get("kv.level"));
+		assertEquals("spoof", records.get(2).get("keyValues.level"));
 		assertEquals("ERROR", records.get(2).get("level"));
 		assertEquals(2, run("system-first", modular, null).size());
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,ltsv,flat", "true,ltsv,flat", "false,jsonl,flat", "true,jsonl,flat", "false,ltsv,true",
+			"true,jsonl,true", "false,ltsv,prefixed", "true,ltsv,prefixed", "false,jsonl,prefixed",
+			"true,jsonl,prefixed" })
+	void configuredModesApplyToProviderAndFluentValues(boolean modular, String format, String mode) throws Exception {
+		var records = run("keyvalues-mode", modular, "logwood.smoke.Smoke$CallbackValues", "logging.format=" + format,
+				"logging.keyvalues.mode=" + mode);
+		assertEquals(2, records.size());
+		String request = mode.equals("prefixed") ? "keyValues.request" : "request";
+		assertEquals("context", records.get(0).get(request));
+		assertEquals("event", records.get(1).get(request));
+		assertEquals("spoof", records.get(1).get("keyValues.level"));
+		assertTrue(records.stream().allMatch(r -> r.get("level").equals("INFO")));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,ltsv,none", "true,ltsv,none", "false,jsonl,none", "true,jsonl,none", "false,ltsv,false",
+			"true,jsonl,false" })
+	void noneSkipsSensitiveProvidersAndEventAccessors(boolean modular, String format, String mode) throws Exception {
+		String services = "logwood.smoke.Smoke$DisabledValues\nlogwood.smoke.Smoke$CallbackValues";
+		var records = run("no-keyvalues", modular, services, "logging.format=" + format,
+				"logging.keyvalues.mode=" + mode);
+		assertEquals(List.of("safe system", "safe fluent", "safe event"),
+				records.stream().map(r -> r.get("message")).toList());
+		for (var record : records)
+			assertEquals(java.util.Set.of("time", "level", "thread", "threadId", "logger", "message"), record.keySet());
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,ltsv", "true,ltsv", "false,jsonl", "true,jsonl" })
+	void invalidKeyValuesModeFailsClosedWithASanitizedDiagnostic(boolean modular, String format) throws Exception {
+		var records = run("basic", modular, null, "logging.format=" + format,
+				"logging.keyvalues.mode=secret=do-not-print");
+		assertEquals(1, records.size());
+		assertEquals("Logwood disabled: invalid configuration", records.getFirst().get("message"));
 	}
 
 	@ParameterizedTest
@@ -193,7 +230,7 @@ class RuntimeTest {
 		assertEquals(3, records.size());
 		assertEquals(List.of("INFO", "WARN", "ERROR"), records.stream().map(r -> r.get("level")).toList());
 		assertEquals("hello world", records.getFirst().get("message"));
-		assertEquals("spoof", records.get(2).get("kv.level"));
+		assertEquals("spoof", records.get(2).get("keyValues.level"));
 		assertTrue(records.stream().allMatch(r -> r.containsKey("time") != journal));
 		assertTrue(lastOutput.startsWith(journal ? "<6>{" : "{"));
 	}
@@ -233,7 +270,7 @@ class RuntimeTest {
 		else
 			assertEquals(List.of("2023-11-14T22:13:20.123Z", "2023-11-14T22:13:20.124Z", "2023-11-14T22:13:20.125Z"),
 					records.stream().map(r -> r.get("time")).toList());
-		assertEquals("spoof", records.get(1).get("kv.time"));
+		assertEquals("spoof", records.get(1).get("keyValues.time"));
 	}
 
 	@ParameterizedTest
@@ -257,10 +294,10 @@ class RuntimeTest {
 				records.stream().map(r -> r.get("message")).toList());
 		records = run("mdc", modular, provider);
 		assertEquals("INFO", records.get(0).get("level"));
-		assertEquals("also spoof", records.get(0).get("kv.level"));
-		assertEquals("v\n", records.get(0).get("kv.a%3a%09"));
-		assertEquals("also spoof", records.get(0).get("kv.level"));
-		assertFalse(run("mdc", modular, null).get(0).containsKey("kv.a%3a%09"));
+		assertEquals("also spoof", records.get(0).get("keyValues.level"));
+		assertEquals("v\n", records.get(0).get("a%3a%09"));
+		assertEquals("also spoof", records.get(0).get("keyValues.level"));
+		assertFalse(run("mdc", modular, null).get(0).containsKey("a%3a%09"));
 	}
 
 	@ParameterizedTest
@@ -361,7 +398,7 @@ class RuntimeTest {
 		}
 		assertEquals(2, counts.size());
 		assertTrue(counts.values().stream().allMatch(count -> count == 3));
-		assertEquals(2, records.stream().filter(record -> "spoof".equals(record.get("kv.threadId"))).count());
+		assertEquals(2, records.stream().filter(record -> "spoof".equals(record.get("keyValues.threadId"))).count());
 	}
 
 	@ParameterizedTest
@@ -387,7 +424,7 @@ class RuntimeTest {
 		var records = run("system-only", modular, services);
 		assertEquals(List.of("system only", "argument value"), records.stream().map(r -> r.get("message")).toList());
 		if (provider.equals("SystemOnlyConfig"))
-			assertEquals("direct", records.getFirst().get("kv.source"));
+			assertEquals("direct", records.getFirst().get("source"));
 		if (provider.equals("default"))
 			assertEquals("""
 					time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only
@@ -400,10 +437,10 @@ class RuntimeTest {
 	void contextCallbackWorksWithoutSlf4jAndDoesNotLeakAfterScope(boolean modular) throws Exception {
 		traceInitialization = true;
 		var records = run("context", modular, "logwood.smoke.Smoke$CallbackValues");
-		assertEquals("spoof", records.getFirst().get("kv.level"));
-		assertEquals("v\n\u001b[8m", records.getFirst().get("kv.a%3a%09"));
+		assertEquals("spoof", records.getFirst().get("keyValues.level"));
+		assertEquals("v\n\u001b[8m", records.getFirst().get("a%3a%09"));
 		assertEquals("INFO", records.getFirst().get("level"));
-		assertFalse(records.get(1).containsKey("kv.level"));
+		assertFalse(records.get(1).containsKey("keyValues.level"));
 	}
 
 	@ParameterizedTest

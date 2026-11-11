@@ -48,7 +48,7 @@ ScopedKeyValues.builder().add("requestId", "r-123").run(() -> {
 });
 ```
 
-The record contains `kv.requestId:r-123`. Logwood discovers this contributor in its
+The record contains `requestId:r-123`. Logwood discovers this contributor in its
 single LogwoodService pass. The Rainbow Gum facade separately discovers its own
 required factory; both instances share the same ScopedValue storage.
 
@@ -62,7 +62,7 @@ ScopedKeyValues.builder().add("requestId", "r-123").run(() -> {
 });
 ```
 
-This emits only `kv.requestId:event-456` for that key.
+This emits only `requestId:event-456` for that key.
 
 ## Scope and merge rules
 
@@ -83,8 +83,10 @@ arbitrary new platform or virtual threads do not inherit them.
 Logwood reads the snapshot directly without a per-event scoped-map copy. The core
 uses a bounded temporary merge map only when fields exist, overlays fluent
 values, and encodes each label once. Overridden objects are not rendered.
-No context map is retained between records. All final labels use `kv.` and the
-usual defensive encoding; built-in metadata remains separate.
+No context map is retained between records. The selected key-values mode and
+usual defensive encoding apply; built-in metadata remains separate.
+`logging.keyvalues.mode=none` skips reading scoped context into log records;
+scoped storage itself remains available to the application.
 
 Storage accepts at most **32 merged distinct keys**, **256 UTF-16 units per key**,
 and **4096 per value**. Overflow throws IllegalArgumentException without data,

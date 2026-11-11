@@ -140,11 +140,30 @@ class OptionalSlf4jTest {
 	void spiAndContextWorkWithoutLoadingAnySlf4jTypes(boolean modular, boolean observableApi) throws Exception {
 		assertEquals(
 				"""
-						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only\tkv.source:direct
-						time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value\tkv.source:direct
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only\tsource:direct
+						time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value\tsource:direct
 						""",
 				run(modular, observableApi,
 						"logwood.smoke.SystemOnlySmoke$Settings\nlogwood.smoke.SystemOnlySmoke$Values", "basic"));
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,ltsv,prefixed", "true,ltsv,prefixed", "false,jsonl,prefixed", "true,jsonl,prefixed",
+			"false,ltsv,none", "true,jsonl,none" })
+	void modesWorkWhenSlf4jIsAbsent(boolean modular, String format, String mode) throws Exception {
+		String output = run(modular, false, "logwood.smoke.SystemOnlySmoke$Values", "basic", "logging.format=" + format,
+				"logging.keyvalues.mode=" + mode);
+		if (format.equals("jsonl")) {
+			for (String line : output.lines().toList()) {
+				var record = JsonlTest.parse(line);
+				assertEquals(mode.equals("none") ? null : "direct", record.get("keyValues.source"));
+				assertFalse(record.containsKey("source"));
+			}
+		}
+		else {
+			assertEquals(!mode.equals("none"), output.contains("\tkeyValues.source:direct"));
+			assertFalse(output.contains("\tsource:"));
+		}
 	}
 
 	@ParameterizedTest
@@ -178,7 +197,7 @@ class OptionalSlf4jTest {
 				""";
 		String output = run(modular, false, services, "services");
 		String record = """
-				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:services\tkv.winner:high\tkv.low.instances:1\tkv.tie:first\tkv.high.instances:1\tkv.config.instances:1
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:services\twinner:high\tlow.instances:1\ttie:first\thigh.instances:1\tconfig.instances:1
 				""";
 		assertEquals(record.repeat(2), output);
 	}
@@ -247,11 +266,9 @@ class OptionalSlf4jTest {
 		assertEquals("", launch(compiler, temp));
 		String output = launch(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
 				"--module-path", jar() + File.pathSeparator + classes, "-m", "sample.app/sample.app.Main"), temp);
-		assertEquals(
-				"""
-						time:<time>\tlevel:DEBUG\tthread:main\tthreadId:<id>\tlogger:app\tmessage:named application\tkv.app:named
-						""",
-				output);
+		assertEquals("""
+				time:<time>\tlevel:DEBUG\tthread:main\tthreadId:<id>\tlogger:app\tmessage:named application\tapp:named
+				""", output);
 	}
 
 	@Test

@@ -111,7 +111,7 @@ class RecordEncoderTest {
 		});
 		out.writeKeyValues();
 		assertEquals("""
-				slf4j:value null\tsystem:value null\tkv.empty:\ttruncated:true
+				slf4j:value null\tsystem:value null\tempty:\ttruncated:true
 				""", out.finish());
 	}
 
@@ -143,7 +143,7 @@ class RecordEncoderTest {
 		var labels = new HashSet<String>();
 		for (int i = 0; i <= 0xffff; i++) {
 			var out = new RecordEncoder(-1, false);
-			out.extra("mdc.", String.valueOf((char) i), "v");
+			out.extra(String.valueOf((char) i), "v");
 			String record = out.finish();
 			assertEquals(1, record.chars().filter(c -> c == ':').count());
 			assertFalse(record.contains("\t"));
@@ -152,7 +152,7 @@ class RecordEncoderTest {
 			assertTrue(labels.add(label), "Key collision " + i);
 		}
 		var out = new RecordEncoder(-1, false);
-		out.extra("mdc.", "", "");
+		out.extra("", "");
 		assertTrue(labels.add(out.finish().split(":", 2)[0]));
 	}
 
@@ -239,7 +239,7 @@ class RecordEncoderTest {
 		assertEquals(33, record.stripTrailing().split("\t").length);
 		assertTrue(record.endsWith("\ttruncated:true\n"));
 		assertFalse(record.contains("late"));
-		assertFalse(record.contains("kv.key32:"));
+		assertFalse(record.contains("key32:"));
 	}
 
 	@Test
@@ -261,7 +261,7 @@ class RecordEncoderTest {
 		out.eventValue("request", "event");
 		out.writeKeyValues();
 		assertEquals("""
-				kv.request:event
+				request:event
 				""", out.finish());
 	}
 
@@ -288,8 +288,8 @@ class RecordEncoderTest {
 		out.writeKeyValues();
 		String record = out.finish();
 		assertEquals(65, record.stripTrailing().split("\t").length);
-		assertTrue(record.contains("kv.context31:value"));
-		assertTrue(record.contains("kv.event31:value"));
+		assertTrue(record.contains("context31:value"));
+		assertTrue(record.contains("event31:value"));
 		assertFalse(record.contains("overflow"));
 		assertFalse(record.contains("toString failed"));
 		assertTrue(record.endsWith("\ttruncated:true\n"));
@@ -315,7 +315,7 @@ class RecordEncoderTest {
 		out.writeKeyValues();
 		String record = out.finish();
 		assertEquals(33, record.stripTrailing().split("\t").length);
-		assertTrue(record.startsWith("kv.key0:override\t"));
+		assertTrue(record.startsWith("key0:override\t"));
 		assertFalse(record.contains("overflow"));
 		assertTrue(record.endsWith("\ttruncated:true\n"));
 	}

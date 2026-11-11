@@ -64,11 +64,11 @@ class JsonlTest {
 			var out = new RecordEncoder(-1, true);
 			out.start("message");
 			out.text(input);
-			out.extra("kv.", input, "value");
+			out.extra(input, "value");
 			String record = out.finish();
 			var parsed = parse(record);
 			assertEquals(input, parsed.get("message"), "UTF-16 " + i);
-			assertEquals("value", parsed.get("kv." + input), "Key UTF-16 " + i);
+			assertEquals("value", parsed.get(input), "Key UTF-16 " + i);
 			for (int p = 0; p < record.length() - 1; p++) {
 				char c = record.charAt(p);
 				assertFalse(
@@ -91,10 +91,10 @@ class JsonlTest {
 		var parsed = parse(out.finish());
 		assertEquals(11, parsed.size());
 		assertEquals("INFO", parsed.get("level"));
-		assertEquals("", parsed.get("kv."));
-		assertEquals("a:", parsed.get("kv.a:"));
-		assertEquals("a%3a", parsed.get("kv.a%3a"));
-		assertEquals("", parsed.get("kv.empty"));
+		assertEquals("", parsed.get(""));
+		assertEquals("a:", parsed.get("a:"));
+		assertEquals("a%3a", parsed.get("a%3a"));
+		assertEquals("", parsed.get("empty"));
 		assertFalse(parsed.containsKey("truncated"));
 	}
 
@@ -124,8 +124,8 @@ class JsonlTest {
 				var names = new java.util.HashSet<String>();
 				for (int i = 0; i < 64; i++) {
 					String key = i + "\u0000\"\\".repeat(width);
-					names.add("kv." + key);
-					out.extra("kv.", key, "x".repeat(4096));
+					names.add(key);
+					out.extra(key, "x".repeat(4096));
 				}
 				out.numberField("threadId", Long.MIN_VALUE);
 				out.start("last");
@@ -134,7 +134,8 @@ class JsonlTest {
 				assertTrue(record.length() <= RecordEncoder.RECORD);
 				var parsed = parse(record);
 				assertEquals(Boolean.TRUE, parsed.get("truncated"));
-				assertTrue(parsed.keySet().stream().filter(key -> key.startsWith("kv.")).allMatch(names::contains));
+				names.addAll(java.util.Set.of("threadId", "last", "truncated"));
+				assertTrue(names.containsAll(parsed.keySet()));
 			}
 		});
 	}
@@ -175,14 +176,14 @@ class JsonlTest {
 			}
 		};
 		var out = new RecordEncoder(-1, true);
-		out.extra("kv.", "x".repeat(1_000_000), hostile);
+		out.extra("x".repeat(1_000_000), hostile);
 		assertEquals(Map.of("truncated", Boolean.TRUE), parse(out.finish()));
 		out = new RecordEncoder(-1, true);
 		for (int i = 0; i < 4; i++) {
 			out.start("m" + i);
 			out.text("x".repeat(4096));
 		}
-		out.extra("kv.", "\u0000".repeat(256), hostile);
+		out.extra("\u0000".repeat(256), hostile);
 		out.throwable(new IllegalStateException() {
 			@Override
 			public String getMessage() {
@@ -191,7 +192,7 @@ class JsonlTest {
 			}
 		});
 		var parsed = parse(out.finish());
-		assertFalse(parsed.containsKey("kv." + "\u0000".repeat(256)));
+		assertFalse(parsed.containsKey("" + "\u0000".repeat(256)));
 		assertEquals(Boolean.TRUE, parsed.get("truncated"));
 		assertEquals(0, calls.get());
 	}

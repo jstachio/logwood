@@ -10,6 +10,7 @@ import java.util.Comparator;
 import io.jstach.logwood.spi.LogwoodService;
 import io.jstach.logwood.spi.LogwoodService.LogwoodConfig;
 import io.jstach.logwood.spi.LogwoodService.KeyValuesProvider;
+import io.jstach.logwood.spi.LogwoodService.KeyValuesMode;
 import java.util.ResourceBundle;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
@@ -35,6 +36,8 @@ public final class Logwood {
 	private boolean journal;
 
 	private boolean json;
+
+	private KeyValuesMode keyValuesMode = KeyValuesMode.FLAT;
 
 	private Logwood() {
 	}
@@ -67,13 +70,16 @@ public final class Logwood {
 			}
 			if (selected == null)
 				selected = new LogwoodConfig();
-			contributors.sort(Comparator.comparingInt(KeyValuesProvider::order));
-			KeyValuesProvider[] values = contributors.toArray(KeyValuesProvider[]::new);
-
 			String format = selected.propertyOrNull("logging.format");
 			if (format != null && !format.equalsIgnoreCase("ltsv") && !format.equalsIgnoreCase("jsonl"))
 				throw new IllegalArgumentException("Invalid log format");
 			json = "jsonl".equalsIgnoreCase(format);
+			keyValuesMode = Objects.requireNonNull(selected.keyValuesMode());
+			if (keyValuesMode == KeyValuesMode.NONE)
+				contributors.clear();
+			else
+				contributors.sort(Comparator.comparingInt(KeyValuesProvider::order));
+			KeyValuesProvider[] values = contributors.toArray(KeyValuesProvider[]::new);
 			Level level = selected.levelOrNull("");
 			String prefix = selected.propertyOrNull("logging.journald");
 			if (prefix != null && !prefix.equalsIgnoreCase("true") && !prefix.equalsIgnoreCase("false"))
@@ -140,7 +146,7 @@ public final class Logwood {
 			return;
 		ACTIVE.set(Boolean.TRUE);
 		try {
-			var out = new RecordEncoder(journal ? priority(level) : -1, json);
+			var out = new RecordEncoder(journal ? priority(level) : -1, json, keyValuesMode);
 			if (!journal)
 				out.time(Objects.requireNonNull(config).now());
 			out.start("level");
@@ -175,11 +181,13 @@ public final class Logwood {
 				out.start("error");
 				out.throwable(thrown);
 			}
-			for (var provider : Objects.requireNonNull(keyValues))
-				out.keyValues(provider);
-			if (eventValues != null)
-				eventValues.accept(out);
-			out.writeKeyValues();
+			if (keyValuesMode != KeyValuesMode.NONE) {
+				for (var provider : Objects.requireNonNull(keyValues))
+					out.keyValues(provider);
+				if (eventValues != null)
+					eventValues.accept(out);
+				out.writeKeyValues();
+			}
 			print(out);
 		}
 		catch (Throwable failure) {

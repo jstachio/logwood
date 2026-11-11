@@ -63,9 +63,9 @@
     "io.jstach.logwood:logwood:1.1.0-SNAPSHOT": {
       "coordinate": "io.jstach.logwood:logwood:1.1.0-SNAPSHOT",
       "jar": "logwood-1.1.0-SNAPSHOT.jar",
-      "bytes": 22857,
-      "classFiles": 14,
-      "sha256": "527b7ccbb1fb5d4ef123a6ad172ed82a033505d3979e39ccf2d89dfc732f1c26"
+      "bytes": 24445,
+      "classFiles": 15,
+      "sha256": "1432140a3fe7ef5021dfff14a87eb3e79dd87a1d137c451aaf269fc67bf03b38"
     },
     "io.jstach.logwood:logwood-slf4j:1.1.0-SNAPSHOT": {
       "coordinate": "io.jstach.logwood:logwood-slf4j:1.1.0-SNAPSHOT",
@@ -77,7 +77,7 @@
   },
   "runtimeSets": {
     "Logwood": {
-      "bytes": 28929,
+      "bytes": 30517,
       "artifacts": [
         "io.jstach.logwood:logwood:1.1.0-SNAPSHOT",
         "io.jstach.logwood:logwood-slf4j:1.1.0-SNAPSHOT",

@@ -8,7 +8,8 @@ A modern **slf4j-simple replacement** for SLF4J 2 and `System.Logger`.
 Logwood writes secure, structured logs to stdout with a small runtime and one
 application SPI. Start here, then move to [Rainbow Gum](https://jstach.io/rainbowgum/)
 when you need more outputs, asynchronous publishing, or framework integration.
-The `logging.level` and `logging.level.<logger>` properties carry over.
+The `logging.level` and `logging.level.<logger>` properties carry over. Ordinary
+application keys are bare by default; metadata collisions use `keyValues.`.
 
 The core runs on **Java 21+**. Optional scoped key values use **Java 25+** and
 Rainbow Gum 0.17.2's ScopedKeyValues API. System.Logger works without SLF4J.
@@ -36,6 +37,19 @@ time:2026-11-11T12:00:00.000Z	level:INFO	thread:main	threadId:1	logger:app	messa
 Select JSON Lines with `-Dlogging.format=jsonl`. Both formats escape controls,
 terminal sequences, bidi/format characters, and malformed UTF-16, with fixed
 work and output limits. See [the security model](SECURITY.md).
+
+Select application key-value output with `logging.keyvalues.mode`:
+
+| Value | Output |
+| --- | --- |
+| `none` / `false` | Omit context and fluent fields; skip backend collection and rendering. |
+| `flat` / `true` | Default: bare keys, with `keyValues.` protecting collisions. |
+| `prefixed` | Every application key receives `keyValues.`. |
+
+Names are case-insensitive. For example, flat mode writes `requestId:42` and
+`keyValues.level:custom`; prefixed mode writes `keyValues.requestId:42`.
+Both formats use dotted names and preserve collision protection. This setting
+does not redact data already present in messages, arguments, or exceptions.
 
 The following shows literal text written inside values:
 

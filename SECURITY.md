@@ -20,8 +20,18 @@ by `n`. Escapes and surrogate pairs are emitted atomically, including at limits.
 LTSV labels encode forbidden characters, percent signs, and malformed surrogates
 without collisions. JSON member names preserve the original key text using JSON
 escaping; keys are skipped as a whole when they cannot fit. Context and fluent
-fields are namespaced away from metadata in both formats.
+fields cannot replace reserved metadata in either format: flat mode prefixes
+collisions with `keyValues.`, while prefixed mode applies that namespace to all
+keys. The namespace itself and the `truncated` marker are reserved.
 Marker arguments and event marker accessors are ignored.
+
+`logging.keyvalues.mode=none` (alias `false`) omits provider context and fluent
+key values. The backend does not call provider ordering/contribution methods,
+retrieve event key-value lists, retain their entries, or render their values.
+Services are still discovered and constructed once during bootstrap. This does
+not disable application-owned MDC/scoped storage or redact messages, arguments,
+or exceptions. Facade code can evaluate suppliers before the backend receives
+an event.
 
 The [LTSV encoding reference](doc/ltsv.md) defines the exact character ranges,
 escape spellings, label extensions, and decoding order. All input ESC characters
@@ -71,7 +81,7 @@ before hashing or retaining keys in that map.
 
 ## Failures and reentry
 
-Invalid root configuration, invalid journald or format settings, or
+Invalid root configuration, invalid journald, format, or key-value mode settings, or
 multiple configuration providers or invalid service constructors/order methods disable logging instead of falling back to
 another backend. An MDC factory failure disables logging when SLF4J initializes;
 System.Logger alone never requests that adapter. Bad per-name configuration disables that logger. One fixed

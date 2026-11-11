@@ -38,20 +38,41 @@ message is the text `null`.
 
 ## Labels
 
-All context and fluent keys receive the `kv.` prefix, keeping them separate
-from built-in metadata. Encode the original key using these rules:
+`logging.keyvalues.mode` selects application key-value output in both formats:
 
-| Original key text | Encoded label after `kv.` |
+| Mode | Behavior |
+| --- | --- |
+| `none` / `false` | Omit all context and fluent fields; skip backend collection and rendering. |
+| `flat` / `true` | Default: keep ordinary keys bare; prefix collisions with `keyValues.`. |
+| `prefixed` | Prefix every application key with `keyValues.`. |
+
+Values are case-insensitive and resolved once at initialization. Invalid values
+disable logging with one fixed diagnostic. There is no nested-object option.
+`LogwoodConfig.keyValuesMode()` exposes the same choice as the
+`LogwoodService.KeyValuesMode` enum for programmatic configuration.
+
+Reserved names are `time`, `level`, `logger`, `message`, `thread`, `threadId`,
+`threadName`, `error`, `stacktrace`, `keyValues`, and `truncated`. Names starting
+with `keyValues.` also receive another prefix, preserving distinct original keys:
+`level` becomes `keyValues.level`, while `keyValues.level` becomes
+`keyValues.keyValues.level`. Collision protection applies even when an optional
+built-in field is absent. Prefixed JSON members remain dotted names; Logwood does
+not expand dots into objects.
+
+After choosing the namespace, encode the original key using these rules:
+
+| Original key text | Encoded key (before an optional namespace prefix) |
 | --- | --- |
 | ASCII `A-Z a-z 0-9 _ . -` | Unchanged |
 | Other valid Unicode | UTF-8 bytes, each written `%hh` with lowercase hex digits |
 | Empty key | `%` |
 | Unpaired UTF-16 surrogate | `%uXXXX` with four lowercase hex digits |
 
-Examples: `a b` becomes `kv.a%20b`, `:` becomes `kv.%3a`, `%` becomes
-`kv.%25`, `é` becomes `kv.%c3%a9`, and `😀` becomes `kv.%f0%9f%98%80`.
-An unpaired U+D800 becomes `kv.%ud800`; the literal text `%ud800` becomes
-`kv.%25ud800`. The empty key is `kv.%`, distinct from a literal percent key.
+In the default flat mode, `a b` becomes `a%20b`, `:` becomes `%3a`, `%` becomes
+`%25`, `é` becomes `%c3%a9`, and `😀` becomes `%f0%9f%98%80`.
+An unpaired U+D800 becomes `%ud800`; the literal text `%ud800` becomes
+`%25ud800`. The empty key is `%`, distinct from a literal percent key. Prefixed
+mode adds `keyValues.` to each result: for example `keyValues.a%20b`.
 The `%uXXXX` form is an extension for malformed UTF-16, not a UTF-8 byte
 escape. These encodings keep distinct keys distinct. Null keys are skipped
 and set the truncation marker.
@@ -60,8 +81,9 @@ and set the truncation marker.
 
 Separate records and fields **before** decoding escapes. Decode value
 backslash escapes in one pass; recursively decoding `\\n` would incorrectly
-turn literal escape text into a newline. For labels, first remove `kv.`, then
-handle the empty-key sentinel, `%uXXXX` code units, and UTF-8 percent bytes.
+turn literal escape text into a newline. For application labels, remove one
+leading `keyValues.` namespace if present, then handle the empty-key sentinel,
+`%uXXXX` code units, and UTF-8 percent bytes.
 Do not percent-decode a decoded result again: `%25ud800` is literal `%ud800`.
 This escaping is Logwood's convention layered on LTSV; a generic LTSV reader
 can split fields but needs these rules to recover original text.
@@ -69,8 +91,9 @@ can split fields but needs these rules to recover original text.
 An encoded value is limited to 4,096 UTF-16 code units and a complete record
 to 16,384, including the truncation marker and final LF. Escapes and valid
 surrogate pairs are never split at a limit. Keys are skipped whole if the
-raw key or encoded label (excluding `kv.`) exceeds 256 code units. Clipping
-adds `truncated:true`; clipped values cannot recover the omitted suffix.
+raw key or encoded label (excluding an added `keyValues.` namespace) exceeds
+256 code units. Clipping adds `truncated:true`; clipped values cannot recover
+the omitted suffix.
 See [the security model](../SECURITY.md) for the remaining work and storage
 limits and failure behavior.
 

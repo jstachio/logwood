@@ -42,7 +42,7 @@ class DiscoveryTest {
 		return String.join(File.pathSeparator, paths);
 	}
 
-	private String run(boolean modular, boolean both) throws Exception {
+	private String run(boolean modular, boolean both, String... properties) throws Exception {
 
 		String modules = modules();
 		if (configModule != null)
@@ -53,6 +53,8 @@ class DiscoveryTest {
 		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
 		if (json)
 			command.add("-Dlogging.format=jsonl");
+		for (String property : properties)
+			command.add("-D" + property);
 		command.add("-Xlog:class+load=info,class+init=info:file=" + trace);
 		if (modular) {
 			String roots = "io.jstach.logwood.scopedkeyvalues";
@@ -97,9 +99,9 @@ class DiscoveryTest {
 		includeSlf4j = withSlf4j;
 		assertEquals(
 				"""
-						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:outer\tkv.request:outer\tkv.a%3a%09:v\\n\\u001b[8m
-						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:inner\tkv.request:inner\tkv.a%3a%09:v\\n\\u001b[8m
-						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:restored\tkv.request:outer\tkv.a%3a%09:v\\n\\u001b[8m
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:outer\trequest:outer\ta%3a%09:v\\n\\u001b[8m
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:inner\trequest:inner\ta%3a%09:v\\n\\u001b[8m
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:restored\trequest:outer\ta%3a%09:v\\n\\u001b[8m
 						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:unbound
 						""",
 				run(modular, false));
@@ -129,11 +131,35 @@ class DiscoveryTest {
 				}
 				assertNull(parser.nextToken());
 			}
-			assertEquals(expected.get(i), fields.getOrDefault("kv.request", ""));
+			assertEquals(expected.get(i), fields.getOrDefault("request", ""));
 			if (i < 3)
-				assertEquals("v\n\u001b[8m", fields.get("kv.a:\t"));
+				assertEquals("v\n\u001b[8m", fields.get("a:\t"));
 			else
-				assertFalse(fields.containsKey("kv.request"));
+				assertFalse(fields.containsKey("request"));
+		}
+	}
+
+	@ParameterizedTest
+	@CsvSource({ "false,false,none", "true,false,none", "false,true,none", "true,true,none", "false,false,prefixed",
+			"true,false,prefixed", "false,true,prefixed", "true,true,prefixed" })
+	void scopedValuesFollowTheModeWithoutSlf4j(boolean modular, boolean json, String mode) throws Exception {
+		includeSlf4j = false;
+		this.json = json;
+		String output = run(modular, false, "logging.keyvalues.mode=" + mode);
+		var lines = output.lines().toList();
+		assertEquals(4, lines.size());
+		if (mode.equals("none")) {
+			assertFalse(output.contains("request"));
+			assertFalse(output.contains("v\\n\\u001b[8m"));
+			assertFalse(output.contains("keyValues."));
+			assertFalse(output.contains("a%3a%09"));
+		}
+		else {
+			String request = json ? "\"keyValues.request\":\"" : "\tkeyValues.request:";
+			assertTrue(lines.get(0).contains(request + "outer"));
+			assertTrue(lines.get(1).contains(request + "inner"));
+			assertTrue(lines.get(2).contains(request + "outer"));
+			assertFalse(lines.get(3).contains(request));
 		}
 	}
 
@@ -145,12 +171,13 @@ class DiscoveryTest {
 		assertEquals(5, lines.size());
 		assertEquals(
 				"""
-						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:fluent\tkv.request:last event\tkv.a%3a%09:v\\n\\u001b[8m
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:fluent\trequest:last event\ta%3a%09:v\\n\\u001b[8m
 						"""
 					.stripTrailing(),
 				lines.get(2));
-		assertEquals(1, lines.get(2).split("kv.request:", -1).length - 1);
-		assertFalse(lines.get(4).contains("kv."));
+		assertEquals(1, lines.get(2).split("request:", -1).length - 1);
+		assertFalse(lines.get(4).contains("\trequest:"));
+		assertFalse(lines.get(4).contains("\ta%3a%09:"));
 	}
 
 	@ParameterizedTest
@@ -204,8 +231,8 @@ class DiscoveryTest {
 		String output = run(true, false);
 		assertEquals(4, output.lines().count());
 		assertTrue(output.lines().allMatch(line -> line.startsWith("<6>")), output);
-		assertTrue(output.lines().allMatch(line -> line.contains("\tkv.request:configured")), output);
-		assertTrue(output.lines().allMatch(line -> line.contains("\tkv.app:custom")), output);
+		assertTrue(output.lines().allMatch(line -> line.contains("\trequest:configured")), output);
+		assertTrue(output.lines().allMatch(line -> line.contains("\tapp:custom")), output);
 	}
 
 }
