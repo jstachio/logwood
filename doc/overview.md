@@ -202,6 +202,7 @@ The only built-in properties are:
 | `logging.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
 | `logging.format` | `ltsv` (default) or `jsonl`, case-insensitive. |
 | `logging.keyvalues.mode` | `none`/`false`, `flat`/`true` (default), or `prefixed`; case-insensitive. |
+| `logging.ltsv.columns` | Fields written first without labels, for example `time,level,logger,thread,message`; LTSV only. |
 | `logging.ltsv.stacktrace` | `inline`/`false` (default) or `lines`/`true`, which puts each stack trace line on its own line; case-insensitive. |
 
 ```sh
@@ -578,6 +579,31 @@ record limits count the continuation lines, and `truncated:true` stays on the
 record's line. Other values disable logging; JSON Lines ignores the option.
 Journald stores each continuation line as its own entry, so keep the default
 there.
+
+### Columns
+
+`logging.ltsv.columns` lists fields to write first, in that order and without
+labels, so they line up in a terminal: `time`, `level`, `thread`, `logger`, and
+`message` (aliases `timestamp` and `msg`), case-insensitive. The fields not
+listed follow with their labels, then `error` and the key values. With
+`logging.ltsv.columns=time,level,logger,thread,message`:
+
+```text
+2026-11-12T03:00:00.123Z	INFO	app	main	1	Hello world
+```
+
+`thread` is two columns: the name, then `threadId`. Journald mode omits `time`,
+column or not. With `logging.ltsv.columns=thread,message`:
+
+```text
+main	1	Hello world	time:2026-11-12T03:00:00.123Z	level:INFO	logger:app
+```
+
+Output with columns is no longer LTSV; it is for reading, not parsing. Unknown
+or repeated names disable logging. JSON Lines and failure diagnostics ignore
+the option. With `logging.ltsv.stacktrace=lines` an empty first column is
+written as the reserved escape `\e`, so a record still never starts with a tab.
+A literal `\e` remains `\\e`.
 
 
 ## Measurements

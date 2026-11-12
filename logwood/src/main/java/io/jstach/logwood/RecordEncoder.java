@@ -42,7 +42,7 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 
 	private boolean quoted;
 
-	private int end, frames, throwables, fields, trace = -1, traceEnd;
+	private int end, frames, throwables, fields, trace = -1, traceEnd, column = -1;
 
 	private @Nullable Map<String, @Nullable Object> keyValues;
 
@@ -102,9 +102,16 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			quoted = string;
 		}
 		else {
+			// With stack trace lines a record must not start with a tab, so an empty
+			// first column is the reserved escape \e, distinct from a literal \\e.
+			if (fields == 1 && lines && out.length() == column)
+				out.append("\\e");
 			if (fields != 0)
 				out.append('\t');
-			out.append(label).append(':');
+			if (label.isEmpty())
+				column = out.length();
+			else
+				out.append(label).append(':');
 		}
 		fields++;
 		end = Math.min(CONTENT, out.length() + VALUE);
@@ -124,7 +131,11 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	}
 
 	void time(long epochMillis) {
-		start("time");
+		time("time", epochMillis);
+	}
+
+	void time(String label, long epochMillis) {
+		start(label);
 		text(TIME.format(Instant.ofEpochMilli(epochMillis)));
 	}
 

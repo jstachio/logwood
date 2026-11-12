@@ -36,7 +36,9 @@ time:2026-11-11T12:00:00.000Z	level:INFO	thread:main	threadId:1	logger:app	messa
 ```
 
 During development, `-Dlogging.ltsv.stacktrace=lines` puts each stack trace line
-on its own line after a tab, which can still be joined back by rule.
+on its own line after a tab, which can still be joined back by rule, and
+`-Dlogging.ltsv.columns=time,level,logger,thread,message` drops those labels so
+the fields line up.
 
 Select JSON Lines with `-Dlogging.format=jsonl`. Both formats escape controls,
 terminal sequences, bidi/format characters, and malformed UTF-16, with fixed

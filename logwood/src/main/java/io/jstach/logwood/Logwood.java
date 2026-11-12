@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Locale;
 import io.jstach.logwood.spi.LogwoodService;
 import io.jstach.logwood.spi.LogwoodService.LogwoodConfig;
 import io.jstach.logwood.spi.LogwoodService.KeyValuesProvider;
@@ -38,6 +39,13 @@ public final class Logwood {
 	private boolean json;
 
 	private boolean lines;
+
+	private static final String[] LABELS = { "time", "level", "thread", "logger", "message" };
+
+	// Indexes into LABELS: the first columns are written without labels.
+	private int[] order = { 0, 1, 2, 3, 4 };
+
+	private int columns;
 
 	private KeyValuesMode keyValuesMode = KeyValuesMode.FLAT;
 
@@ -88,6 +96,25 @@ public final class Logwood {
 				contributors.sort(Comparator.comparingInt(KeyValuesProvider::order));
 			KeyValuesProvider[] values = contributors.toArray(KeyValuesProvider[]::new);
 			Level level = selected.levelOrNull("");
+			int[] order = { 0, 1, 2, 3, 4 };
+			int columns = 0;
+			String list = selected.propertyOrNull("logging.ltsv.columns");
+			if (list != null && !list.isBlank()) {
+				for (String column : list.split(",", -1)) {
+					String name = column.strip().toLowerCase(Locale.ROOT);
+					int field = name.equals("timestamp") ? 0
+							: name.equals("msg") ? 4 : java.util.List.of(LABELS).indexOf(name);
+					// Unknown (-1) and repeated fields are not found among the remaining
+					// ones.
+					int at = columns;
+					while (at < order.length && order[at] != field)
+						at++;
+					if (at == order.length)
+						throw new IllegalArgumentException("Invalid columns option");
+					System.arraycopy(order, columns, order, columns + 1, at - columns);
+					order[columns++] = field;
+				}
+			}
 			String prefix = selected.propertyOrNull("logging.journald");
 			if (prefix != null && !prefix.equalsIgnoreCase("true") && !prefix.equalsIgnoreCase("false"))
 				throw new IllegalArgumentException("Invalid journald option");
@@ -96,6 +123,10 @@ public final class Logwood {
 			rootLevel = level == null ? Level.INFO.getSeverity() : level.getSeverity();
 			journal = "true".equalsIgnoreCase(prefix);
 			this.lines = lines && !json;
+			if (!json) {
+				this.order = order;
+				this.columns = columns;
+			}
 			state = 2;
 		}
 		catch (Throwable failure) {
@@ -155,36 +186,39 @@ public final class Logwood {
 		ACTIVE.set(Boolean.TRUE);
 		try {
 			var out = new RecordEncoder(journal ? priority(level) : -1, json, keyValuesMode, lines);
-			if (!journal)
-				out.time(Objects.requireNonNull(config).now());
-			out.start("level");
-			out.text(level == Level.WARNING ? "WARN" : level.name());
-			var thread = Thread.currentThread();
-			out.start("thread");
-			out.text(thread.getName());
-			out.numberField("threadId", thread.threadId());
-			out.start("logger");
-			out.text(name);
-			out.start("message");
 			int count = args == null ? 0 : args.length;
 			if (mode == 0 && thrown == null && args != null && count > 0 && args[count - 1] instanceof Throwable t) {
 				thrown = t;
 				count--;
 			}
-			if (mode == 1) {
-				if (bundle != null && message != null) {
-					try {
-						message = bundle.getString(message);
+			var thread = Thread.currentThread();
+			for (int i = 0; i < order.length; i++) {
+				// A column is written without its label.
+				String label = i < columns ? "" : LABELS[order[i]];
+				switch (order[i]) {
+					case 0 -> {
+						if (!journal)
+							out.time(label, Objects.requireNonNull(config).now());
 					}
-					catch (java.util.MissingResourceException ignored) {
-						/* The key is the fallback. */ }
+					case 1 -> {
+						out.start(label);
+						out.text(level == Level.WARNING ? "WARN" : level.name());
+					}
+					case 2 -> {
+						out.start(label);
+						out.text(thread.getName());
+						out.numberField(i < columns ? "" : "threadId", thread.threadId());
+					}
+					case 3 -> {
+						out.start(label);
+						out.text(name);
+					}
+					default -> {
+						out.start(label);
+						message(out, message, args, count, bundle, mode);
+					}
 				}
-				out.system(message, args);
 			}
-			else if (mode == 2)
-				out.scalar(Objects.requireNonNull(args)[0]);
-			else
-				out.message(message, args, count);
 			if (thrown != null)
 				out.error(thrown);
 			if (keyValuesMode != KeyValuesMode.NONE) {
@@ -203,6 +237,24 @@ public final class Logwood {
 		finally {
 			ACTIVE.set(Boolean.FALSE);
 		}
+	}
+
+	private static void message(RecordEncoder out, @Nullable String message, @Nullable Object @Nullable [] args,
+			int count, @Nullable ResourceBundle bundle, int mode) {
+		if (mode == 1) {
+			if (bundle != null && message != null) {
+				try {
+					message = bundle.getString(message);
+				}
+				catch (java.util.MissingResourceException ignored) {
+					/* The key is the fallback. */ }
+			}
+			out.system(message, args);
+		}
+		else if (mode == 2)
+			out.scalar(Objects.requireNonNull(args)[0]);
+		else
+			out.message(message, args, count);
 	}
 
 	public @Nullable LogwoodConfig configuration() {
