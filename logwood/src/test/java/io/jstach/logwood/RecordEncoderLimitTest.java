@@ -211,10 +211,14 @@ class RecordEncoderLimitTest {
 			out.start("m");
 			out.message("{}".repeat(64), args, 64);
 		}));
-		assertTrue(ltsv(out -> {
+		assertEquals("m:" + "a".repeat(64) + "\n", ltsv(out -> {
+			out.start("m");
+			out.message("{}".repeat(64), args, 65);
+		}));
+		assertEquals("m:" + "a".repeat(64) + "{}" + MARKER, ltsv(out -> {
 			out.start("m");
 			out.message("{}".repeat(65), args, 65);
-		}).startsWith("m:" + "a".repeat(64) + "{}"));
+		}));
 	}
 
 	@Test
@@ -513,6 +517,25 @@ class RecordEncoderLimitTest {
 
 		record = trace(chain(9));
 		assertTrue(record.endsWith("e7\\nCaused by: [throwable limit]" + MARKER), record);
+	}
+
+	@Test
+	void suppressedPastTheThrowableLimitAreMarked() {
+		var a = error("a");
+		for (int i = 0; i < 4; i++)
+			a.addSuppressed(error("a" + i));
+		var b = error("b");
+		b.addSuppressed(error("b0"));
+		var outer = error("outer");
+		outer.addSuppressed(a);
+		outer.addSuppressed(b);
+		String record = trace(outer);
+		assertTrue(record.endsWith("b0\n"), record);
+
+		outer.addSuppressed(error("c"));
+		record = trace(outer);
+		assertTrue(record.endsWith("b0" + MARKER), record);
+		assertFalse(record.contains(": c"));
 	}
 
 	@Test
