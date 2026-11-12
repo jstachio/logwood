@@ -2,6 +2,7 @@
 
 [![Build](https://github.com/jstachio/logwood/actions/workflows/ci.yml/badge.svg)](https://github.com/jstachio/logwood/actions/workflows/ci.yml)
 [![Docs + Javadoc](https://jstach.io/logwood/badge.svg)](https://jstach.io/logwood/)
+[![Code Coverage](https://jstach.io/logwood/coverage/badge.svg)](https://jstach.io/logwood/coverage/)
 [![Maven Central](https://img.shields.io/maven-central/v/io.jstach.logwood/logwood)](https://central.sonatype.com/artifact/io.jstach.logwood/logwood)
 
 A modern **slf4j-simple replacement** for SLF4J 2 and `System.Logger`.
