@@ -231,12 +231,16 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			return;
 		}
 		int limit = Math.min(pattern.length(), VALUE), cursor = 0, argument = 0;
-		while (cursor < limit && argument < Math.min(count, 64) && out.length() < end) {
+		while (cursor < limit && argument < count && out.length() < end) {
 			int anchor = cursor;
 			while (anchor + 1 < limit && (pattern.charAt(anchor) != '{' || pattern.charAt(anchor + 1) != '}'))
 				anchor++;
 			if (anchor + 1 >= limit)
 				break;
+			if (argument == 64) {
+				truncated = true;
+				break;
+			}
 			boolean slash = anchor > 0 && pattern.charAt(anchor - 1) == '\\';
 			boolean doubled = anchor > 1 && pattern.charAt(anchor - 2) == '\\';
 			text(pattern, cursor, slash ? anchor - 1 : anchor);
@@ -552,11 +556,12 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			if (out.length() >= end)
 				return;
 			var suppressed = thrown.getSuppressed();
-			for (int i = 0; i < Math.min(suppressed.length, 4) && throwables < 8 && out.length() < end; i++) {
+			int shown = 0;
+			for (; shown < Math.min(suppressed.length, 4) && throwables < 8 && out.length() < end; shown++) {
 				text("\nSuppressed: ");
-				throwable(suppressed[i]);
+				throwable(suppressed[shown]);
 			}
-			if (suppressed.length > 4)
+			if (suppressed.length > shown)
 				truncated = true;
 			var cause = thrown.getCause();
 			if (cause != null && out.length() < end) {
