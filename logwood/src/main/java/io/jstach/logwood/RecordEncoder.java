@@ -363,12 +363,14 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			Logwood.nonFatal(failure);
 			text(pattern);
 			text(" [MessageFormat failed: ");
+			@Nullable String reason = null;
 			try {
-				text(failure.getMessage());
+				reason = failure.getMessage();
 			}
 			catch (Throwable accessor) {
 				Logwood.nonFatal(accessor);
 			}
+			text(reason == null ? failure.getClass().getName() : reason);
 			text("]");
 		}
 	}
