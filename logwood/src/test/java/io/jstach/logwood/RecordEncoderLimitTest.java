@@ -368,14 +368,18 @@ class RecordEncoderLimitTest {
 	void systemBigNumbersAreFormattedOnlyWithinBounds() {
 		var big = BigInteger.ONE.shiftLeft(4095);
 		assertEquals(MessageFormat.format("{0,number,#}", big), formatted("{0,number,#}", big));
-		assertEquals("m:{0,number,#} [format failed]\n", system("{0,number,#}", big.shiftLeft(1)));
+		assertEquals("m:{0,number,#} [MessageFormat failed: Cannot format given Object as a Number]\n",
+				system("{0,number,#}", big.shiftLeft(1)));
 
 		var scaled = new BigDecimal(BigInteger.ONE, 4096);
 		assertEquals("0", formatted("{0,number,#}", scaled));
-		assertTrue(system("{0,number,#}", new BigDecimal(BigInteger.ONE, 4097)).endsWith(" [format failed]\n"));
-		assertTrue(system("{0,number,#}", new BigDecimal(BigInteger.ONE, -4097)).endsWith(" [format failed]\n"));
+		assertTrue(system("{0,number,#}", new BigDecimal(BigInteger.ONE, 4097))
+			.endsWith(" [MessageFormat failed: Cannot format given Object as a Number]\n"));
+		assertTrue(system("{0,number,#}", new BigDecimal(BigInteger.ONE, -4097))
+			.endsWith(" [MessageFormat failed: Cannot format given Object as a Number]\n"));
 		var wide = new BigDecimal(BigInteger.ONE.shiftLeft(4096), 0);
-		assertTrue(system("{0,number,#}", wide).endsWith(" [format failed]\n"));
+		assertTrue(system("{0,number,#}", wide)
+			.endsWith(" [MessageFormat failed: Cannot format given Object as a Number]\n"));
 	}
 
 	@Test

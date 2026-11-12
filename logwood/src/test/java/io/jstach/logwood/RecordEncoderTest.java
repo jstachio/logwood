@@ -6,10 +6,13 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.HashSet;
 import java.text.MessageFormat;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import io.jstach.logwood.spi.LogwoodService.KeyValuesProvider;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.helpers.MessageFormatter;
 
@@ -204,6 +207,65 @@ class RecordEncoderTest {
 		out.start("m");
 		out.system("don't touch quotes", new Object[] { 2, "world" });
 		assertEquals("m:don't touch quotes\n", out.finish());
+	}
+
+	static final class BadToString {
+
+		@Override
+		public String toString() {
+			throw new RuntimeException("expected");
+		}
+
+	}
+
+	// Rainbow Gum's MessageFormatStyleTest cases and its default, JDK style, results.
+	static Stream<Arguments> rainbowGumSystemCases() {
+		var boom = new RuntimeException("boom");
+		return Stream.of(Arguments.of("It's done", "It's done", new Object[] { "x" }),
+				Arguments.of("It''s {0}", "It's x", new Object[] { "x" }),
+				Arguments.of("It's {0}", "Its {0}", new Object[] { "x" }),
+				Arguments.of("It's {0}", "It's {0}", new Object[] {}),
+				Arguments.of("unmatched {", "unmatched {", new Object[] { "x" }),
+				Arguments.of("unmatched {0", "unmatched {0 [MessageFormat failed: Unmatched braces in the pattern.]",
+						new Object[] { "x" }),
+				Arguments.of("{a} and {0}", "{a} and {0} [MessageFormat failed: can't parse argument number: a]",
+						new Object[] { "x" }),
+				Arguments.of("value {0}", "value {0} [MessageFormat failed: expected]",
+						new Object[] { new BadToString() }),
+				Arguments.of("a={0} b={1}", "a=X b={}", new Object[] { "X", "{}" }),
+				Arguments.of("{0} {1} {2}", "a b c", new Object[] { "a", "b", "c" }),
+				Arguments.of("failed {0}", "failed java.lang.RuntimeException: boom", new Object[] { boom }),
+				Arguments.of("user {0} failed {1}", "user bob failed java.lang.RuntimeException: boom",
+						new Object[] { "bob", boom }),
+				Arguments.of("{0} {1} failed {2}", "a b failed java.lang.RuntimeException: boom",
+						new Object[] { "a", "b", boom }));
+	}
+
+	@ParameterizedTest
+	@MethodSource("rainbowGumSystemCases")
+	void systemFormattingMatchesRainbowGum(String pattern, String expected, Object[] args) {
+		var out = new RecordEncoder(-1, false);
+		out.start("m");
+		out.system(pattern, args);
+		assertEquals("m:" + expected + "\n", out.finish());
+	}
+
+	@Test
+	void systemFailureWithAFailingMessageIsStillWritten() {
+		var out = new RecordEncoder(-1, false);
+		out.start("m");
+		out.system("value {0}", new Object[] { new Object() {
+			@Override
+			public String toString() {
+				throw new RuntimeException() {
+					@Override
+					public String getMessage() {
+						throw new IllegalStateException("message");
+					}
+				};
+			}
+		} });
+		assertEquals("m:value {0} [MessageFormat failed: ]\n", out.finish());
 	}
 
 	@Test
