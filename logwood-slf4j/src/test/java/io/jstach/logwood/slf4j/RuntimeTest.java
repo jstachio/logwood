@@ -52,8 +52,7 @@ class RuntimeTest {
 			.toString();
 		String registration = Path.of("target/classes").toAbsolutePath().toString();
 		String tests = Path.of("target/test-classes").toAbsolutePath().toString();
-		var command = new ArrayList<String>();
-		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		var command = java();
 		for (String property : properties)
 			command.add("-D" + property);
 		Path initialization = folder.resolve("initialization.log");
@@ -551,8 +550,8 @@ class RuntimeTest {
 		finally {
 			compiler.destroyForcibly();
 		}
-		var child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-				"--module-path", modules + File.pathSeparator + classes, "-m", "sample.app/sample.Main")
+		var child = new ProcessBuilder(
+				java("--module-path", modules + File.pathSeparator + classes, "-m", "sample.app/sample.Main"))
 			.redirectErrorStream(true)
 			.redirectOutput(diagnostics.toFile())
 			.start();
@@ -569,6 +568,17 @@ class RuntimeTest {
 		finally {
 			child.destroyForcibly();
 		}
+	}
+
+	// The codecover build passes its JaCoCo agent on, so child JVMs are measured too.
+	private static List<String> java(String... arguments) {
+		var command = new ArrayList<String>();
+		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		String agent = System.getProperty("logwood.test.agent", "");
+		if (!agent.isEmpty())
+			command.add(agent);
+		command.addAll(List.of(arguments));
+		return command;
 	}
 
 }

@@ -27,7 +27,17 @@ jobs:
           distribution: temurin
           java-version-file: .java-version
           cache: maven
-      - run: bin/doc.sh
+      # Tests run, unlike the release doc build, only for the coverage report; a failing
+      # test must not stop the snapshot docs from publishing. CI reports test failures.
+      - run: bin/doc.sh -DskipTests=false -Dcodecover=true -Dmaven.test.failure.ignore=true
+      - name: Add coverage report
+        if: hashFiles('coverage/target/site/jacoco-aggregate/jacoco.xml') != ''
+        run: |
+          cp -r coverage/target/site/jacoco-aggregate target/reports/apidocs/coverage
+          java bin/src/main/java/io/jstach/script/CoverageReport.java \
+            target/reports/apidocs/coverage/jacoco.xml \
+            --badge target/reports/apidocs/coverage/badge.svg \
+            --summary "$GITHUB_STEP_SUMMARY"
       - name: Check Pages configuration
         id: pages
         env:

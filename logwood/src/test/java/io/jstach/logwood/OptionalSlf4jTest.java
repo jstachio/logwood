@@ -53,8 +53,7 @@ class OptionalSlf4jTest {
 			Files.writeString(descriptor, provider);
 		}
 		String tests = Path.of("target/test-classes").toAbsolutePath().toString();
-		var command = new ArrayList<String>();
-		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		var command = java();
 		for (String property : properties)
 			command.add("-D" + property);
 		Path trace = folder.resolve("load.log");
@@ -264,8 +263,8 @@ class OptionalSlf4jTest {
 				source.resolve("module-info.java").toString(), source.resolve("sample/app/Settings.java").toString(),
 				values.toString(), app.toString());
 		assertEquals("", launch(compiler, temp));
-		String output = launch(List.of(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-				"--module-path", jar() + File.pathSeparator + classes, "-m", "sample.app/sample.app.Main"), temp);
+		String output = launch(
+				java("--module-path", jar() + File.pathSeparator + classes, "-m", "sample.app/sample.app.Main"), temp);
 		assertEquals("""
 				time:<time>\tlevel:DEBUG\tthread:main\tthreadId:<id>\tlogger:app\tmessage:named application\tapp:named
 				""", output);
@@ -293,6 +292,17 @@ class OptionalSlf4jTest {
 		finally {
 			compiler.destroyForcibly();
 		}
+	}
+
+	// The codecover build passes its JaCoCo agent on, so child JVMs are measured too.
+	private static List<String> java(String... arguments) {
+		var command = new ArrayList<String>();
+		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		String agent = System.getProperty("logwood.test.agent", "");
+		if (!agent.isEmpty())
+			command.add(agent);
+		command.addAll(List.of(arguments));
+		return command;
 	}
 
 }

@@ -2,6 +2,7 @@ package io.jstach.script;
 
 import java.io.StringReader;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.xml.sax.InputSource;
 
@@ -44,6 +45,25 @@ public final class BuildToolsTest {
 			check(html.indexOf("data-logwood-docs") == html.lastIndexOf("data-logwood-docs"), "idempotent doc scripts");
 			check(html.contains("resources/logwood.js") && !html.contains("_VERSION_"), "local versioned HTML");
 			check(Files.readString(directory.resolve("overview.md")).equals("# 1.0.0"), "versioned Markdown");
+			Path report = directory.resolve("jacoco.xml"), summary = directory.resolve("summary.md"),
+					coverage = directory.resolve("coverage.svg");
+			Files.writeString(report, """
+					<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+					<!DOCTYPE report PUBLIC "-//JACOCO//DTD Report 1.1//EN" "report.dtd">
+					<report name="logwood"><package name="p"><counter type="LINE" missed="9" covered="9"/></package>
+					<counter type="INSTRUCTION" missed="1" covered="9"/><counter type="BRANCH" missed="0" covered="0"/>
+					<counter type="LINE" missed="1" covered="3"/><counter type="METHOD" missed="0" covered="2"/>
+					<counter type="CLASS" missed="0" covered="1"/></report>
+					""");
+			CoverageReport.run(new String[] { report.toString(), "--summary", summary.toString(), "--badge",
+					coverage.toString() });
+			check(Files.readString(summary).contains("| Line | 75.0% | 3 | 1 |"), "coverage uses report counters");
+			check(Files.readString(summary).contains("| Branch | 100.0% | 0 | 0 |"), "coverage without branches");
+			check(factory.newDocumentBuilder()
+				.parse(coverage.toFile())
+				.getDocumentElement()
+				.getAttribute("aria-label")
+				.equals("coverage: 75.0%"), "coverage badge");
 		}
 		finally {
 			try (var paths = Files.walk(directory)) {

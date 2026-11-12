@@ -49,8 +49,7 @@ class DiscoveryTest {
 			modules += File.pathSeparator + configModule;
 		String tests = Path.of("target/test-classes").toAbsolutePath().toString();
 		Path trace = temp.resolve("initialization.log"), stdout = temp.resolve("out"), stderr = temp.resolve("err");
-		var command = new ArrayList<String>();
-		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		var command = java();
 		if (json)
 			command.add("-Dlogging.format=jsonl");
 		for (String property : properties)
@@ -233,6 +232,17 @@ class DiscoveryTest {
 		assertTrue(output.lines().allMatch(line -> line.startsWith("<6>")), output);
 		assertTrue(output.lines().allMatch(line -> line.contains("\trequest:configured")), output);
 		assertTrue(output.lines().allMatch(line -> line.contains("\tapp:custom")), output);
+	}
+
+	// The codecover build passes its JaCoCo agent on, so child JVMs are measured too.
+	private static List<String> java(String... arguments) {
+		var command = new ArrayList<String>();
+		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		String agent = System.getProperty("logwood.test.agent", "");
+		if (!agent.isEmpty())
+			command.add(agent);
+		command.addAll(List.of(arguments));
+		return command;
 	}
 
 }
