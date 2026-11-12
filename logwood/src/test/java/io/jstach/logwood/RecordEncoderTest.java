@@ -218,6 +218,26 @@ class RecordEncoderTest {
 
 	}
 
+	record Throws(Throwable thrown) {
+
+		@Override
+		public String toString() {
+			if (thrown instanceof Error error)
+				throw error;
+			throw (RuntimeException) thrown;
+		}
+
+	}
+
+	static final class Recursive {
+
+		@Override
+		public String toString() {
+			return "x" + this;
+		}
+
+	}
+
 	// Rainbow Gum's MessageFormatStyleTest cases and its default, JDK style, results.
 	static Stream<Arguments> rainbowGumSystemCases() {
 		var boom = new RuntimeException("boom");
@@ -232,6 +252,12 @@ class RecordEncoderTest {
 						new Object[] { "x" }),
 				Arguments.of("value {0}", "value {0} [MessageFormat failed: expected]",
 						new Object[] { new BadToString() }),
+				Arguments.of("value {0}", "value {0} [MessageFormat failed: assert]",
+						new Object[] { new Throws(new AssertionError("assert")) }),
+				Arguments.of("value {0}", "value {0} [MessageFormat failed: java.lang.StackOverflowError]",
+						new Object[] { new Recursive() }),
+				Arguments.of("value {0}", "value {0} [MessageFormat failed: java.lang.IllegalStateException]",
+						new Object[] { new Throws(new IllegalStateException()) }),
 				Arguments.of("a={0} b={1}", "a=X b={}", new Object[] { "X", "{}" }),
 				Arguments.of("{0} {1} {2}", "a b c", new Object[] { "a", "b", "c" }),
 				Arguments.of("failed {0}", "failed java.lang.RuntimeException: boom", new Object[] { boom }),
@@ -251,21 +277,17 @@ class RecordEncoderTest {
 	}
 
 	@Test
-	void systemFailureWithAFailingMessageIsStillWritten() {
+	void systemFailingReasonFallsBackToTheClassName() {
+		var thrown = new IllegalStateException() {
+			@Override
+			public String getMessage() {
+				throw new IllegalStateException("message");
+			}
+		};
 		var out = new RecordEncoder(-1, false);
 		out.start("m");
-		out.system("value {0}", new Object[] { new Object() {
-			@Override
-			public String toString() {
-				throw new RuntimeException() {
-					@Override
-					public String getMessage() {
-						throw new IllegalStateException("message");
-					}
-				};
-			}
-		} });
-		assertEquals("m:value {0} [MessageFormat failed: ]\n", out.finish());
+		out.system("value {0}", new Object[] { new Throws(thrown) });
+		assertEquals("m:value {0} [MessageFormat failed: " + thrown.getClass().getName() + "]\n", out.finish());
 	}
 
 	@Test
