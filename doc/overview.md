@@ -202,6 +202,7 @@ The only built-in properties are:
 | `logging.journald` | `true` adds a syslog priority prefix and omits time; default `false`. |
 | `logging.format` | `ltsv` (default) or `jsonl`, case-insensitive. |
 | `logging.keyvalues.mode` | `none`/`false`, `flat`/`true` (default), or `prefixed`; case-insensitive. |
+| `logging.ltsv.stacktrace` | `inline`/`false` (default) or `lines`/`true`, which puts each stack trace line on its own line; case-insensitive. |
 
 ```sh
 java -Dlogging.level=WARN -Dlogging.level.com.example=DEBUG -Dlogging.journald=true ...
@@ -553,6 +554,30 @@ With `logging.journald=true`, the transport adds a syslog priority prefix
 before the first field and omits `time`. Strip that prefix before using a
 generic LTSV parser. JSONL uses JSON string/member-name escaping instead of
 the label rules above; select it with `logging.format=jsonl`.
+
+### Stack trace lines
+
+`logging.ltsv.stacktrace=lines` (alias `true`) makes stack traces readable in a
+terminal. The record's line is unchanged, except that `error` holds only the
+throwable's first line: its class and message. The rest of the stack trace
+follows the record, each line on a line of its own after one tab:
+
+```text
+time:2026-11-12T03:00:00.123Z	level:ERROR	thread:main	threadId:1	logger:app	message:failed	error:java.lang.IllegalStateException: boom
+		at com.example.App.run(App.java:12)
+	Caused by: java.io.IOException: disk full
+		at com.example.Store.write(Store.java:40)
+```
+
+This is no longer strict LTSV, but it is still read by rule rather than by
+guessing: a record never starts with a tab, and a line that does continues the
+record before it. Remove that one tab, decode the line's escapes, and join the
+lines to `error` with LF to get the value the default `inline` (alias `false`)
+writes. Exception messages stay escaped, so they never add lines. The value and
+record limits count the continuation lines, and `truncated:true` stays on the
+record's line. Other values disable logging; JSON Lines ignores the option.
+Journald stores each continuation line as its own entry, so keep the default
+there.
 
 
 ## Measurements

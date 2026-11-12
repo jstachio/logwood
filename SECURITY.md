@@ -7,7 +7,9 @@ redact secrets intentionally passed to the logger.
 ## Record integrity
 
 Only Logwood emits raw field delimiters and record terminators. Data cannot add a
-new field, newline, journald priority, or terminal escape sequence. C0 controls,
+new field, newline, journald priority, or terminal escape sequence. With
+`logging.ltsv.stacktrace=lines`, Logwood also writes each stack trace line after
+LF and a tab; the text on those lines is escaped like any value. C0 controls,
 DEL/C1, Unicode line separators, all Unicode FORMAT characters, backslashes, and
 unpaired surrogates are escaped. The Unicode 17 FORMAT set is covered on the Java 21 baseline,
 including controls absent from older character databases.
