@@ -38,9 +38,11 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 
 	private final KeyValuesMode keyValuesMode;
 
+	private final boolean lines;
+
 	private boolean quoted;
 
-	private int end, frames, throwables, fields;
+	private int end, frames, throwables, fields, trace = -1, traceEnd;
 
 	private @Nullable Map<String, @Nullable Object> keyValues;
 
@@ -53,8 +55,13 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 	}
 
 	RecordEncoder(int priority, boolean json, KeyValuesMode keyValuesMode) {
+		this(priority, json, keyValuesMode, false);
+	}
+
+	RecordEncoder(int priority, boolean json, KeyValuesMode keyValuesMode, boolean lines) {
 		this.json = json;
 		this.keyValuesMode = keyValuesMode;
+		this.lines = lines;
 		if (priority >= 0)
 			out.append('<').append(priority).append('>');
 		if (json)
@@ -521,6 +528,33 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 		output.append('%').append(HEX.charAt(value >>> 4 & 15)).append(HEX.charAt(value & 15));
 	}
 
+	void error(Throwable thrown) {
+		start("error");
+		throwable(thrown);
+		traceEnd = out.length();
+	}
+
+	/*
+	 * A stack trace line. With logging.ltsv.stacktrace=lines it is written raw after LF
+	 * and a tab, so no record starts with a tab; finish moves these lines after the
+	 * record's fields.
+	 */
+	private void line(String text) {
+		if (!lines) {
+			text("\n");
+			text(text);
+			return;
+		}
+		if (end - out.length() < text.length() + 2) {
+			truncated = true;
+			end = out.length();
+			return;
+		}
+		if (trace < 0)
+			trace = out.length();
+		out.append("\n\t").append(text);
+	}
+
 	void throwable(Throwable thrown) {
 		if (out.length() >= end) {
 			truncated = true;
@@ -540,7 +574,7 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			int count = Math.min(stack.length, Math.max(0, 64 - frames));
 			for (int i = 0; i < count && out.length() < end; i++, frames++) {
 				var frame = stack[i];
-				text("\n\tat ");
+				line("\tat ");
 				text(frame.getClassName());
 				text(".");
 				text(frame.getMethodName());
@@ -559,7 +593,7 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 				text(")");
 			}
 			if (stack.length > count) {
-				text("\n[frame limit]");
+				line("[frame limit]");
 				truncated = true;
 			}
 			if (out.length() >= end)
@@ -567,14 +601,14 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			var suppressed = thrown.getSuppressed();
 			int shown = 0;
 			for (; shown < Math.min(suppressed.length, 4) && throwables < 8 && out.length() < end; shown++) {
-				text("\nSuppressed: ");
+				line("Suppressed: ");
 				throwable(suppressed[shown]);
 			}
 			if (suppressed.length > shown)
 				truncated = true;
 			var cause = thrown.getCause();
 			if (cause != null && out.length() < end) {
-				text("\nCaused by: ");
+				line("Caused by: ");
 				throwable(cause);
 			}
 		}
@@ -595,9 +629,14 @@ final class RecordEncoder implements BiConsumer<@Nullable String, @Nullable Stri
 			}
 			return out.append("}\n").toString();
 		}
+		String lines = "";
+		if (trace >= 0) {
+			lines = out.substring(trace, traceEnd);
+			out.delete(trace, traceEnd);
+		}
 		if (truncated)
 			out.append("\ttruncated:true");
-		return out.append('\n').toString();
+		return out.append(lines).append('\n').toString();
 	}
 
 }

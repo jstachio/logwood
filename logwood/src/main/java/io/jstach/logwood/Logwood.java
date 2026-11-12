@@ -37,6 +37,8 @@ public final class Logwood {
 
 	private boolean json;
 
+	private boolean lines;
+
 	private KeyValuesMode keyValuesMode = KeyValuesMode.FLAT;
 
 	private Logwood() {
@@ -74,6 +76,11 @@ public final class Logwood {
 			if (format != null && !format.equalsIgnoreCase("ltsv") && !format.equalsIgnoreCase("jsonl"))
 				throw new IllegalArgumentException("Invalid log format");
 			json = "jsonl".equalsIgnoreCase(format);
+			String stacktrace = selected.propertyOrNull("logging.ltsv.stacktrace");
+			boolean lines = "lines".equalsIgnoreCase(stacktrace) || "true".equalsIgnoreCase(stacktrace);
+			if (stacktrace != null && !lines && !"inline".equalsIgnoreCase(stacktrace)
+					&& !"false".equalsIgnoreCase(stacktrace))
+				throw new IllegalArgumentException("Invalid stack trace option");
 			keyValuesMode = Objects.requireNonNull(selected.keyValuesMode());
 			if (keyValuesMode == KeyValuesMode.NONE)
 				contributors.clear();
@@ -88,6 +95,7 @@ public final class Logwood {
 			keyValues = values;
 			rootLevel = level == null ? Level.INFO.getSeverity() : level.getSeverity();
 			journal = "true".equalsIgnoreCase(prefix);
+			this.lines = lines && !json;
 			state = 2;
 		}
 		catch (Throwable failure) {
@@ -146,7 +154,7 @@ public final class Logwood {
 			return;
 		ACTIVE.set(Boolean.TRUE);
 		try {
-			var out = new RecordEncoder(journal ? priority(level) : -1, json, keyValuesMode);
+			var out = new RecordEncoder(journal ? priority(level) : -1, json, keyValuesMode, lines);
 			if (!journal)
 				out.time(Objects.requireNonNull(config).now());
 			out.start("level");
@@ -177,10 +185,8 @@ public final class Logwood {
 				out.scalar(Objects.requireNonNull(args)[0]);
 			else
 				out.message(message, args, count);
-			if (thrown != null) {
-				out.start("error");
-				out.throwable(thrown);
-			}
+			if (thrown != null)
+				out.error(thrown);
 			if (keyValuesMode != KeyValuesMode.NONE) {
 				for (var provider : Objects.requireNonNull(keyValues))
 					out.keyValues(provider);
