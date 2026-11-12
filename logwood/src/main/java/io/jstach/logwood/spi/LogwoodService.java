@@ -75,7 +75,8 @@ public sealed interface LogwoodService permits LogwoodService.LogwoodConfig, Log
 
 		/**
 		 * Reads logging.level, logging.level.name, logging.journald, logging.format,
-		 * logging.keyvalues.mode, and logging.ltsv.stacktrace; null means absent.
+		 * logging.keyvalues.mode, logging.ltsv.stacktrace, and logging.ltsv.columns; null
+		 * means absent.
 		 */
 		public @Nullable String propertyOrNull(String key) {
 			return System.getProperty(key);
