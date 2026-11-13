@@ -13,7 +13,7 @@ The `logging.level` and `logging.level.<logger>` properties carry over. Ordinary
 application keys are bare by default; metadata collisions use `keyValues.`.
 
 The core runs on **Java 21+**. Optional scoped key values use **Java 25+** and
-Rainbow Gum 0.17.2's ScopedKeyValues API. System.Logger works without SLF4J.
+Rainbow Gum 1.0.0's ScopedKeyValues API. System.Logger works without SLF4J.
 The library is [Zero-Clause BSD](LICENSE).
 
 Named after [logwood (*Haematoxylum campechianum*)](https://powo.science.kew.org/taxon/urn:lsid:ipni.org:names:316401-2/general-information),
