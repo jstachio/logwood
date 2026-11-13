@@ -138,7 +138,7 @@ class StackTraceLinesTest {
 
 	@ParameterizedTest
 	@org.junit.jupiter.params.provider.NullSource
-	@ValueSource(strings = { "inline", "false" })
+	@ValueSource(strings = { "inline", "default", "DEFAULT", "false" })
 	void inlineIsTheDefault(String value) throws Exception {
 		assertEquals(
 				"""

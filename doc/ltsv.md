@@ -119,10 +119,11 @@ time:2026-11-12T03:00:00.123Z	level:ERROR	thread:main	threadId:1	logger:app	mess
 This is no longer strict LTSV, but it is still read by rule rather than by
 guessing: a record never starts with a tab, and a line that does continues the
 record before it. Remove that one tab, decode the line's escapes, and join the
-lines to `error` with LF to get the value the default `inline` (alias `false`)
-writes. Exception messages stay escaped, so they never add lines. The value and
-record limits count the continuation lines, and `truncated:true` stays on the
-record's line. Other values disable logging; JSON Lines ignores the option.
+lines to `error` with LF to get the value the default `inline` (aliases
+`default` and `false`) writes. Exception messages stay escaped, so they never
+add lines. The value and record limits count the continuation lines, and
+`truncated:true` stays on the record's line. Other values disable logging; JSON
+Lines ignores the option.
 Journald stores each continuation line as its own entry, so keep the default
 there.
 
