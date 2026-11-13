@@ -78,14 +78,23 @@ class DiscoveryTest {
 			child.destroyForcibly();
 		}
 		String initialization = Files.readString(trace);
-		assertTrue(initialization.contains("Initializing 'io/jstach/logwood/scopedkeyvalues/LogwoodScopedKeyValues'"));
-		assertFalse(initialization.contains("Initializing 'io/jstach/rainbowgum/RainbowGum'"));
+		var initialized = java.util.regex.Pattern.compile("Initializing '([^']+)'")
+			.matcher(initialization)
+			.results()
+			.map(m -> m.group(1))
+			.collect(java.util.stream.Collectors.toSet());
+		assertEquals(java.util.Set.of("io/jstach/logwood/scopedkeyvalues/LogwoodScopedKeyValues"), initialized.stream()
+			.filter(c -> c.equals("io/jstach/logwood/scopedkeyvalues/LogwoodScopedKeyValues")
+					|| c.equals("io/jstach/rainbowgum/RainbowGum")
+					|| !both && (c.startsWith("org/slf4j/") || c.equals("io/jstach/logwood/spi/LogwoodProvider")))
+			.collect(java.util.stream.Collectors.toSet()));
 		if (!both)
-			assertFalse(initialization.contains("org.slf4j."));
-		if (!both)
-			for (String type : List.of("org/slf4j/LoggerFactory", "org/slf4j/MDC", "org/slf4j/MarkerFactory",
-					"io/jstach/logwood/spi/LogwoodProvider"))
-				assertFalse(initialization.contains("Initializing '" + type + "'"), type);
+			assertEquals(List.of(),
+					java.util.regex.Pattern.compile("\\[class,load\\] (org\\.slf4j\\.[^ ]+)")
+						.matcher(initialization)
+						.results()
+						.map(m -> m.group(1))
+						.toList());
 		// Keep the exact record shape independent of wall time and JVM-assigned IDs.
 		return Files.readString(stdout)
 			.replaceAll("(?m)^time:[^\\t\\r\\n]+\\t", "time:<time>\t")
@@ -112,7 +121,7 @@ class DiscoveryTest {
 		includeSlf4j = false;
 		json = true;
 		String output = run(modular, false);
-		assertFalse(output.contains("\u001b"));
+		assertEquals(expectedScope(true, "flat"), stableJson(output));
 		var lines = output.lines().toList();
 		assertEquals(4, lines.size());
 		var expected = List.of("outer", "inner", "outer", "");
@@ -145,38 +154,22 @@ class DiscoveryTest {
 		includeSlf4j = false;
 		this.json = json;
 		String output = run(modular, false, "logging.keyvalues.mode=" + mode);
-		var lines = output.lines().toList();
-		assertEquals(4, lines.size());
-		if (mode.equals("none")) {
-			assertFalse(output.contains("request"));
-			assertFalse(output.contains("v\\n\\u001b[8m"));
-			assertFalse(output.contains("keyValues."));
-			assertFalse(output.contains("a%3a%09"));
-		}
-		else {
-			String request = json ? "\"keyValues.request\":\"" : "\tkeyValues.request:";
-			assertTrue(lines.get(0).contains(request + "outer"));
-			assertTrue(lines.get(1).contains(request + "inner"));
-			assertTrue(lines.get(2).contains(request + "outer"));
-			assertFalse(lines.get(3).contains(request));
-		}
+		assertEquals(expectedScope(json, mode), stableJson(output));
 	}
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
 	void fluentValuesOverrideScopedContextWithoutDuplicateLabels(boolean modular) throws Exception {
 		String output = run(modular, true);
-		List<String> lines = output.lines().toList();
-		assertEquals(5, lines.size());
 		assertEquals(
 				"""
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:outer\trequest:outer\ta%3a%09:v\\n\\u001b[8m
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:inner\trequest:inner\ta%3a%09:v\\n\\u001b[8m
 						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:fluent\trequest:last event\ta%3a%09:v\\n\\u001b[8m
-						"""
-					.stripTrailing(),
-				lines.get(2));
-		assertEquals(1, lines.get(2).split("request:", -1).length - 1);
-		assertFalse(lines.get(4).contains("\trequest:"));
-		assertFalse(lines.get(4).contains("\ta%3a%09:"));
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:restored\trequest:outer\ta%3a%09:v\\n\\u001b[8m
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:unbound
+						""",
+				output);
 	}
 
 	@ParameterizedTest
@@ -228,10 +221,37 @@ class DiscoveryTest {
 			compiler.destroyForcibly();
 		}
 		String output = run(true, false);
-		assertEquals(4, output.lines().count());
-		assertTrue(output.lines().allMatch(line -> line.startsWith("<6>")), output);
-		assertTrue(output.lines().allMatch(line -> line.contains("\trequest:configured")), output);
-		assertTrue(output.lines().allMatch(line -> line.contains("\tapp:custom")), output);
+		assertEquals(
+				"""
+						<6>level:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:outer\trequest:configured\ta%3a%09:v\\n\\u001b[8m\tapp:custom
+						<6>level:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:inner\trequest:configured\ta%3a%09:v\\n\\u001b[8m\tapp:custom
+						<6>level:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:restored\trequest:configured\ta%3a%09:v\\n\\u001b[8m\tapp:custom
+						<6>level:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:unbound\tapp:custom\trequest:configured
+						""",
+				output);
+	}
+
+	private static String stableJson(String output) {
+		return output.replaceAll("\"time\":\"[^\"]+\"", "\"time\":\"<time>\"")
+			.replaceAll("\"threadId\":[1-9][0-9]*", "\"threadId\":0");
+	}
+
+	private static String expectedScope(boolean json, String mode) {
+		String prefix = mode.equals("prefixed") ? "keyValues." : "";
+		String context = mode.equals("none") ? ""
+				: json ? ",\"" + prefix + "request\":\"%s\",\"" + prefix + "a:\\t\":\"v\\n\\u001b[8m\""
+						: "\t" + prefix + "request:%s\t" + prefix + "a%%3a%%09:v\\n\\u001b[8m";
+		return (json ? """
+				{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"scoped","message":"outer"%s}
+				{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"scoped","message":"inner"%s}
+				{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"scoped","message":"restored"%s}
+				{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"scoped","message":"unbound"}
+				""" : """
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:outer%s
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:inner%s
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:restored%s
+				time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:scoped\tmessage:unbound
+				""").formatted(context.formatted("outer"), context.formatted("inner"), context.formatted("outer"));
 	}
 
 	// The codecover build passes its JaCoCo agent on, so child JVMs are measured too.

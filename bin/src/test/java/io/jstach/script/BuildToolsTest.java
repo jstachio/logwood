@@ -42,8 +42,9 @@ public final class BuildToolsTest {
 			JavadocJavascript.main(new String[] { directory.toString(), "1.0.0" });
 			JavadocJavascript.main(new String[] { directory.toString(), "1.0.0" });
 			String html = Files.readString(directory.resolve("index.html"));
-			check(html.indexOf("data-logwood-docs") == html.lastIndexOf("data-logwood-docs"), "idempotent doc scripts");
-			check(html.contains("resources/logwood.js") && !html.contains("_VERSION_"), "local versioned HTML");
+			assertEquals("""
+					<html><body>1.0.0<script defer data-logwood-docs src="resources/logwood.js"></script>
+					</body></html>""", html);
 			check(Files.readString(directory.resolve("overview.md")).equals("# 1.0.0"), "versioned Markdown");
 			Path report = directory.resolve("jacoco.xml"), summary = directory.resolve("summary.md"),
 					coverage = directory.resolve("coverage.svg");
@@ -57,8 +58,18 @@ public final class BuildToolsTest {
 					""");
 			CoverageReport.run(new String[] { report.toString(), "--summary", summary.toString(), "--badge",
 					coverage.toString() });
-			check(Files.readString(summary).contains("| Line | 75.0% | 3 | 1 |"), "coverage uses report counters");
-			check(Files.readString(summary).contains("| Branch | 100.0% | 0 | 0 |"), "coverage without branches");
+			assertEquals("""
+					### Code coverage (JaCoCo)
+
+					| Counter | Coverage | Covered | Missed |
+					| --- | ---: | ---: | ---: |
+					| Line | 75.0% | 3 | 1 |
+					| Branch | 100.0% | 0 | 0 |
+					| Instruction | 90.0% | 9 | 1 |
+					| Method | 100.0% | 2 | 0 |
+					| Class | 100.0% | 1 | 0 |
+
+					""", Files.readString(summary));
 			check(factory.newDocumentBuilder()
 				.parse(coverage.toFile())
 				.getDocumentElement()
@@ -72,6 +83,11 @@ public final class BuildToolsTest {
 			}
 		}
 		System.out.println("Build tool checks passed");
+	}
+
+	private static void assertEquals(String expected, String actual) {
+		if (!expected.equals(actual))
+			throw new AssertionError("Expected:\n" + expected + "\nActual:\n" + actual);
 	}
 
 	private static void check(boolean condition, String message) {

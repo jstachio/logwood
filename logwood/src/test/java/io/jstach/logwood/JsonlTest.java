@@ -201,6 +201,8 @@ class JsonlTest {
 	void throwableCyclesStayInsideOneString() throws IOException {
 		var first = new IllegalStateException("\"\n\u009b8m");
 		var second = new IllegalArgumentException("second");
+		first.setStackTrace(new StackTraceElement[0]);
+		second.setStackTrace(new StackTraceElement[0]);
 		first.initCause(second);
 		second.initCause(first);
 		first.addSuppressed(second);
@@ -210,7 +212,17 @@ class JsonlTest {
 		String record = out.finish();
 		assertTrue(record.length() <= RecordEncoder.RECORD);
 		var parsed = parse(record);
-		assertTrue(((String) parsed.get("error")).startsWith("java.lang.IllegalStateException: \"\n\u009b8m"));
+		assertEquals("""
+				{"error":"java.lang.IllegalStateException: \\\"\\n\\u009b8m\
+				\\nSuppressed: java.lang.IllegalArgumentException: second\
+				\\nCaused by: java.lang.IllegalStateException: \\\"\\n\\u009b8m\
+				\\nSuppressed: java.lang.IllegalArgumentException: second\
+				\\nCaused by: java.lang.IllegalStateException: \\\"\\n\\u009b8m\
+				\\nSuppressed: java.lang.IllegalArgumentException: second\
+				\\nCaused by: java.lang.IllegalStateException: \\\"\\n\\u009b8m\
+				\\nSuppressed: java.lang.IllegalArgumentException: second\
+				%s","truncated":true}
+				""".formatted("\\nCaused by: [throwable limit]".repeat(5)), record);
 		assertEquals(Boolean.TRUE, parsed.get("truncated"));
 	}
 

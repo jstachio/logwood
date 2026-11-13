@@ -73,13 +73,35 @@ class OptionalSlf4jTest {
 		command.addAll(List.of("logwood.smoke.SystemOnlySmoke", scenario));
 		String output = launch(command, folder);
 		String loaded = Files.readString(trace);
-		assertTrue(loaded.contains("io.jstach.logwood.LogwoodSystemLogger"));
-		assertFalse(loaded.contains("org.slf4j."));
-		assertFalse(loaded.contains("io.jstach.logwood.spi.LogwoodProvider"));
+		var classes = classEvents(loaded, "\\[class,load\\] ([^ ]+)");
+		assertEquals(java.util.Set.of("io.jstach.logwood.LogwoodSystemLogger"),
+				classes.stream()
+					.filter(c -> c.startsWith("org.slf4j.") || c.equals("io.jstach.logwood.LogwoodSystemLogger")
+							|| c.equals("io.jstach.logwood.spi.LogwoodProvider"))
+					.collect(java.util.stream.Collectors.toSet()));
 		if (scenario.equals("basic") || scenario.equals("unicode"))
-			assertEquals(scenario.equals("unicode"),
-					loaded.contains("Initializing 'io/jstach/logwood/RecordEncoder$Escapes'"));
+			assertEquals(
+					scenario.equals("unicode") ? java.util.Set.of("io/jstach/logwood/RecordEncoder$Escapes")
+							: java.util.Set.of(),
+					classEvents(loaded, "Initializing '([^']+)'").stream()
+						.filter(c -> c.equals("io/jstach/logwood/RecordEncoder$Escapes"))
+						.collect(java.util.stream.Collectors.toSet()));
 		return output;
+	}
+
+	// JVM trace text varies by runtime. Parse class events, then compare the full
+	// set relevant to the isolation contract (including any forbidden SLF4J class).
+	private static java.util.Set<String> classEvents(String trace, String pattern) {
+		return java.util.regex.Pattern.compile(pattern)
+			.matcher(trace)
+			.results()
+			.map(m -> m.group(1))
+			.collect(java.util.stream.Collectors.toSet());
+	}
+
+	private static String stableJson(String output) {
+		return output.replaceAll("\"time\":\"[^\"]+\"", "\"time\":\"<time>\"")
+			.replaceAll("\"threadId\":[1-9][0-9]*", "\"threadId\":0");
 	}
 
 	private String launch(List<String> command, Path folder) throws Exception {
@@ -127,11 +149,15 @@ class OptionalSlf4jTest {
 	@CsvSource({ "false,ltsv", "true,ltsv", "false,jsonl", "true,jsonl" })
 	void unicodeInitializesTheEscapeTableWithoutLoadingSlf4j(boolean modular, String format) throws Exception {
 		String output = run(modular, false, null, "unicode", "logging.format=" + format);
-		assertTrue(output.contains("日本語😀\\u202e\\u009b"));
-		if (format.equals("jsonl"))
-			assertEquals("日本語😀\u202e\u009b", JsonlTest.parse(output).get("message"));
-		else
-			assertTrue(output.endsWith("message:日本語😀\\u202e\\u009b\n"));
+		assertEquals(
+				format.equals("jsonl")
+						? """
+								{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"system","message":"日本語😀\\u202e\\u009b"}
+								"""
+						: """
+								time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:日本語😀\\u202e\\u009b
+								""",
+				stableJson(output));
 	}
 
 	@ParameterizedTest
@@ -152,30 +178,33 @@ class OptionalSlf4jTest {
 	void modesWorkWhenSlf4jIsAbsent(boolean modular, String format, String mode) throws Exception {
 		String output = run(modular, false, "logwood.smoke.SystemOnlySmoke$Values", "basic", "logging.format=" + format,
 				"logging.keyvalues.mode=" + mode);
-		if (format.equals("jsonl")) {
-			for (String line : output.lines().toList()) {
-				var record = JsonlTest.parse(line);
-				assertEquals(mode.equals("none") ? null : "direct", record.get("keyValues.source"));
-				assertFalse(record.containsKey("source"));
-			}
-		}
-		else {
-			assertEquals(!mode.equals("none"), output.contains("\tkeyValues.source:direct"));
-			assertFalse(output.contains("\tsource:"));
-		}
+		String context = mode.equals("none") ? ""
+				: format.equals("jsonl") ? ",\"keyValues.source\":\"direct\"" : "\tkeyValues.source:direct";
+		assertEquals((format.equals("jsonl")
+				? """
+						{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"system","message":"system only"%s}
+						{"time":"<time>","level":"WARN","thread":"main","threadId":0,"logger":"system","message":"argument value"%s}
+						"""
+				: """
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:system only%s
+						time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:argument value%s
+						""")
+			.formatted(context, context), stableJson(output));
 	}
 
 	@ParameterizedTest
 	@ValueSource(booleans = { false, true })
 	void systemOverloadsAndFailureDiagnosticsRemainSafeWithoutSlf4j(boolean modular) throws Exception {
 		String output = run(modular, false, null, "overloads");
-		var lines = output.lines().toList();
-		assertEquals(5, lines.size());
-		assertTrue(lines.get(0).endsWith("message:1234"));
-		assertTrue(lines.get(1).endsWith("message:supplier"));
-		assertTrue(lines.get(2).endsWith("message:Bonjour world"));
-		assertTrue(lines.get(3).endsWith("message:value java.lang.IllegalStateException: argument"));
-		assertTrue(lines.get(4).contains("\terror:java.lang.IllegalStateException: line\\n\\u001b[8m"));
+		assertEquals(
+				"""
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:1234
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:supplier
+						time:<time>\tlevel:INFO\tthread:main\tthreadId:<id>\tlogger:system\tmessage:Bonjour world
+						time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:value java.lang.IllegalStateException: argument
+						time:<time>\tlevel:ERROR\tthread:main\tthreadId:<id>\tlogger:system\tmessage:failure\terror:java.lang.IllegalStateException: line\\n\\u001b[8m\\n\\tat sample.App.run(App.java:42)
+						""",
+				output);
 		String failure = run(modular, false, "logwood.smoke.SystemOnlySmoke$BadSettings", "basic");
 		assertEquals(
 				"""
@@ -278,7 +307,7 @@ class OptionalSlf4jTest {
 		Files.writeString(app, "package sample; public class Main { io.jstach.logwood.Logwood implementation; }");
 		Path diagnostics = temp.resolve("hidden-errors");
 		var compiler = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "javac").toString(),
-				"--release", "21", "--module-path", compilationModules(), "-d",
+				"-XDrawDiagnostics", "--release", "21", "--module-path", compilationModules(), "-d",
 				temp.resolve("hidden-classes").toString(), sources.resolve("module-info.java").toString(),
 				app.toString())
 			.redirectErrorStream(true)
@@ -287,7 +316,12 @@ class OptionalSlf4jTest {
 		try {
 			assertTrue(compiler.waitFor(30, TimeUnit.SECONDS));
 			assertNotEquals(0, compiler.exitValue(), "implementation package was exported");
-			assertTrue(Files.readString(diagnostics).contains("io.jstach.logwood"));
+			assertEquals(
+					"""
+							Main.java:1:46: compiler.err.package.not.visible: io.jstach.logwood, (compiler.misc.not.def.access.not.exported: io.jstach.logwood, io.jstach.logwood)
+							1 error
+							""",
+					Files.readString(diagnostics).replace("\r\n", "\n"));
 		}
 		finally {
 			compiler.destroyForcibly();

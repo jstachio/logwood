@@ -71,7 +71,8 @@ The following shows literal text written inside values:
 ## Install and use
 
 The first planned release is **1.0.0**. Until it is published, build and install
-this checkout using **JDK 27 or newer**:
+this checkout using **JDK 27 or newer**. See [AGENTS.md](AGENTS.md) for test
+expectations and required verification:
 
 ```sh
 bin/reformat.sh

@@ -9,11 +9,15 @@ artifacts still target Java 21; ScopedKeyValues targets Java 25.
 | `bin/fast-doc.sh` | The same documentation build with reactor parallelism |
 | `bin/reformat.sh` | Apply Spring Java Format to the library and standalone tools |
 | `bin/build-fast.sh` | Build and test with reactor parallelism, skipping Javadoc |
-| `bin/analyze.sh` | Run library nullness analysis |
+| `bin/analyze.sh` | Run required Error Prone/NullAway nullness checks |
 | `bin/coverage.sh` | Measure test coverage with JaCoCo and print a summary; the report is in `coverage/target/site/jacoco-aggregate` |
 | `bin/mutation.sh` | Run PIT mutation testing locally; reports are in `<module>/target/pit-reports` |
 | `bin/vh` | Rainbow Gum's version, timestamp, and release-tag helper, adapted for Logwood |
 | `bin/rebuild.sh` | Prepare the selected release version and build from a checked-out tag |
+
+Run `bin/analyze.sh` before completing Java changes, even when tests pass.
+See [AGENTS.md](../AGENTS.md) for complete-output test assertions and mutation
+testing expectations.
 
 The Java source launchers have no third-party runtime dependencies. `bin/pom.xml`
 is outside the reactor and exists for editing and formatting the tools. The
