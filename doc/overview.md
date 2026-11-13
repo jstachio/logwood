@@ -56,7 +56,7 @@ Logwood and Rainbow Gum use `logging.level` for the root level and
 `logging.level.<logger>` for named loggers. Application calls through SLF4J or
 `System.Logger` can stay in place. Remove Logwood's provider dependencies and
 add the Rainbow Gum modules you need, with one SLF4J provider at a time.
-The optional scoped-values module implements Rainbow Gum 0.17.2's
+The optional scoped-values module implements Rainbow Gum 1.0.0's
 ScopedKeyValues API, so scoped-context calls use that API already.
 
 Key-value output defaults to bare keys with collision prefixes, matching Rainbow
@@ -304,7 +304,7 @@ application service discovery passes. Markers are ignored.
 
 ## Scoped context
 
-This module implements Rainbow Gum **0.17.2** ScopedKeyValues with Java 25
+This module implements Rainbow Gum **1.0.0** ScopedKeyValues with Java 25
 ScopedValue and automatically contributes context to Logwood through
 `LogwoodService.KeyValuesProvider`. It supplies no LogwoodConfig. Application settings
 and other key-value providers remain independent and compose with scoped context.

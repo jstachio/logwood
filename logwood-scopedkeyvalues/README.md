@@ -1,6 +1,6 @@
 # ScopedKeyValues provider
 
-This module implements Rainbow Gum **0.17.2** ScopedKeyValues with Java 25
+This module implements Rainbow Gum **1.0.0** ScopedKeyValues with Java 25
 ScopedValue and automatically contributes context to Logwood through
 `LogwoodService.KeyValuesProvider`. It supplies no LogwoodConfig. Application settings
 and other key-value providers remain independent and compose with scoped context.
