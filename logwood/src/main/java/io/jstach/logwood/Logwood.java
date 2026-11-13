@@ -87,7 +87,7 @@ public final class Logwood {
 			String stacktrace = selected.propertyOrNull("logging.ltsv.stacktrace");
 			boolean lines = "lines".equalsIgnoreCase(stacktrace) || "true".equalsIgnoreCase(stacktrace);
 			if (stacktrace != null && !lines && !"inline".equalsIgnoreCase(stacktrace)
-					&& !"false".equalsIgnoreCase(stacktrace))
+					&& !"default".equalsIgnoreCase(stacktrace) && !"false".equalsIgnoreCase(stacktrace))
 				throw new IllegalArgumentException("Invalid stack trace option");
 			keyValuesMode = Objects.requireNonNull(selected.keyValuesMode());
 			if (keyValuesMode == KeyValuesMode.NONE)
