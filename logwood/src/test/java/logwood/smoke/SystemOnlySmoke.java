@@ -74,7 +74,10 @@ public final class SystemOnlySmoke {
 			};
 			System.getLogger("system", bundle).log(Level.INFO, "greeting", "world");
 			logger.log(Level.WARNING, "value {0}", new Object[] { new IllegalStateException("argument") });
-			logger.log(Level.ERROR, "failure", new IllegalStateException("line\n\u001b[8m"));
+			var thrown = new IllegalStateException("line\n\u001b[8m");
+			thrown
+				.setStackTrace(new StackTraceElement[] { new StackTraceElement("sample.App", "run", "App.java", 42) });
+			logger.log(Level.ERROR, "failure", thrown);
 			logger.log(Level.OFF, () -> {
 				throw new AssertionError("OFF evaluated");
 			});

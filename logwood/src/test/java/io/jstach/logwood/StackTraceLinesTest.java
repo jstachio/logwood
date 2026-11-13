@@ -100,10 +100,13 @@ class StackTraceLinesTest {
 	@Test
 	void truncationIsMarkedOnTheRecordLine() {
 		String record = record(true, error("boom", 65));
-		assertTrue(record.startsWith("message:failed\terror:java.lang.IllegalStateException: boom\trequest:42"
-				+ "\ttruncated:true\n\t\tat a.B.m0(B.java:1)\n"), record);
-		assertTrue(record.endsWith("\n\t\tat a.B.m63(B.java:64)\n\t[frame limit]\n"), record);
-		assertEquals("true", read(record).get("truncated"));
+		String frames = java.util.stream.IntStream.range(0, 64)
+			.mapToObj(i -> "\t\tat a.B.m%d(B.java:%d)\n".formatted(i, i + 1))
+			.collect(java.util.stream.Collectors.joining());
+		assertEquals("""
+				message:failed\terror:java.lang.IllegalStateException: boom\trequest:42\ttruncated:true
+				%s\t[frame limit]
+				""".formatted(frames), record);
 	}
 
 	@Test
@@ -114,34 +117,52 @@ class StackTraceLinesTest {
 		assertEquals("true", fields.get("truncated"));
 		assertEquals("42", fields.get("request"));
 		// The value limit clips the last line like any other value.
-		assertTrue(record.endsWith("\n\t\tat a.B.m1(B.java:2)\n\t\tat a.B.m2(B.java\n"), record);
+		assertEquals("""
+				message:failed\terror:java.lang.IllegalStateException: %s\trequest:42\ttruncated:true
+				\t\tat a.B.m0(B.java:1)
+				\t\tat a.B.m1(B.java:2)
+				\t\tat a.B.m2(B.java
+				""".formatted("x".repeat(4000)), record);
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings = { "lines", "LINES", "true" })
 	void selectedByProperty(String value) throws Exception {
-		String output = run(value, null);
-		assertTrue(output.contains("\terror:java.lang.IllegalStateException: boom\n\t\tat a.B.m0(B.java:1)\n"), output);
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthread:<thread>\tthreadId:<id>\tlogger:app\tmessage:failed\terror:java.lang.IllegalStateException: boom
+						\t\tat a.B.m0(B.java:1)
+						""",
+				run(value, null));
 	}
 
 	@ParameterizedTest
+	@org.junit.jupiter.params.provider.NullSource
 	@ValueSource(strings = { "inline", "false" })
 	void inlineIsTheDefault(String value) throws Exception {
-		assertEquals(run(null, null), run(value, null));
-		assertTrue(
-				run(value, null).contains("\terror:java.lang.IllegalStateException: boom\\n\\tat a.B.m0(B.java:1)\n"));
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthread:<thread>\tthreadId:<id>\tlogger:app\tmessage:failed\terror:java.lang.IllegalStateException: boom\\n\\tat a.B.m0(B.java:1)
+						""",
+				run(value, null));
 	}
 
 	@Test
 	void jsonLinesIgnoreTheOption() throws Exception {
-		assertEquals(run(null, "jsonl"), run("lines", "jsonl"));
+		assertEquals(
+				"""
+						{"time":"<time>","level":"ERROR","thread":"<thread>","threadId":<id>,"logger":"app","message":"failed","error":"java.lang.IllegalStateException: boom\\n\\tat a.B.m0(B.java:1)"}
+						""",
+				run("lines", "jsonl"));
 	}
 
 	@Test
 	void invalidOptionsDisableLogging() throws Exception {
-		String output = run("multi", null);
-		assertTrue(output.contains("message:Logwood disabled: invalid configuration\n"), output);
-		assertFalse(output.contains("boom"));
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.logwood\tmessage:Logwood disabled: invalid configuration
+						""",
+				run("multi", null));
 	}
 
 	private static String run(String stacktrace, String format) throws Exception {
@@ -164,7 +185,7 @@ class StackTraceLinesTest {
 			set("logging.ltsv.stacktrace", before);
 			set("logging.format", beforeFormat);
 		}
-		return bytes.toString(StandardCharsets.UTF_8).replaceAll("\"?time\"?:\"?[^\\t,\"]+\"?[\\t,]", "");
+		return GoldenOutput.normalize(bytes.toString(StandardCharsets.UTF_8));
 	}
 
 	private static void set(String key, String value) {

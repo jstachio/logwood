@@ -84,16 +84,18 @@ class RuntimeTest {
 		}
 		if (traceInitialization) {
 			String trace = Files.readString(initialization);
-			assertTrue(trace.contains("Initializing 'io/jstach/logwood/Logwood'"), trace);
-			for (String type : List.of("org/slf4j/LoggerFactory", "org/slf4j/MDC", "org/slf4j/MarkerFactory",
-					"io/jstach/logwood/spi/LogwoodProvider"))
-				assertFalse(trace.contains("Initializing '" + type + "'"),
-						type + " initialized during System.Logger use");
+			assertEquals(java.util.Set.of("io/jstach/logwood/Logwood"),
+					java.util.regex.Pattern.compile("Initializing '([^']+)'")
+						.matcher(trace)
+						.results()
+						.map(m -> m.group(1))
+						.filter(c -> c.equals("io/jstach/logwood/Logwood") || c.startsWith("org/slf4j/")
+								|| c.equals("io/jstach/logwood/spi/LogwoodProvider"))
+						.collect(java.util.stream.Collectors.toSet()));
 		}
 		String data = Files.readString(stdout);
 		lastOutput = stableMetadata(data);
-		assertFalse(data.contains("secret=do-not-print"));
-		assertFalse(data.contains("\r"));
+		assertEquals(0, data.chars().filter(c -> c == '\r').count(), "records must use LF");
 		List<Map<String, String>> records = new ArrayList<>();
 		for (String line : data.lines().toList()) {
 			assertTrue(line.length() < 16_384);
@@ -145,7 +147,9 @@ class RuntimeTest {
 		// Keep timestamps and IDs in parsed records; normalize only golden text
 		// expectations.
 		return output.replaceAll("(?m)^time:[^\\t\\r\\n]+\\t", "time:<time>\t")
-			.replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t");
+			.replaceAll("\\tthreadId:[1-9][0-9]*\\t", "\tthreadId:<id>\t")
+			.replaceAll("\"time\":\"[^\"]+\"", "\"time\":\"<time>\"")
+			.replaceAll("\"threadId\":[1-9][0-9]*", "\"threadId\":0");
 	}
 
 	private static String decode(String input) {
@@ -218,8 +222,11 @@ class RuntimeTest {
 	void invalidKeyValuesModeFailsClosedWithASanitizedDiagnostic(boolean modular, String format) throws Exception {
 		var records = run("basic", modular, null, "logging.format=" + format,
 				"logging.keyvalues.mode=secret=do-not-print");
-		assertEquals(1, records.size());
-		assertEquals("Logwood disabled: invalid configuration", records.getFirst().get("message"));
+		assertEquals(format.equals("jsonl")
+				? """
+						{"time":"<time>","level":"ERROR","threadId":0,"logger":"io.jstach.logwood","message":"Logwood disabled: invalid configuration"}
+						"""
+				: INVALID_CONFIGURATION, lastOutput);
 	}
 
 	@ParameterizedTest
@@ -231,7 +238,17 @@ class RuntimeTest {
 		assertEquals("hello world", records.getFirst().get("message"));
 		assertEquals("spoof", records.get(2).get("keyValues.level"));
 		assertTrue(records.stream().allMatch(r -> r.containsKey("time") != journal));
-		assertTrue(lastOutput.startsWith(journal ? "<6>{" : "{"));
+		assertEquals(
+				("""
+						@INFO@{"time":"<time>","level":"INFO","thread":"main","threadId":0,"logger":"sample","message":"hello world"}
+						@WARN@{"time":"<time>","level":"WARN","thread":"main","threadId":0,"logger":"system","message":"hello world"}
+						@ERROR@{"time":"<time>","level":"ERROR","thread":"main","threadId":0,"logger":"sample","message":"structured","keyValues.level":"spoof"}
+						""")
+					.replace("@INFO@", journal ? "<6>" : "")
+					.replace("@WARN@", journal ? "<4>" : "")
+					.replace("@ERROR@", journal ? "<3>" : "")
+					.replace("\"time\":\"<time>\",", journal ? "" : "\"time\":\"<time>\","),
+				lastOutput);
 	}
 
 	@ParameterizedTest
@@ -253,7 +270,11 @@ class RuntimeTest {
 		var records = run("basic", modular, null, "logging.format=jsonl", "logging.level=secret=do-not-print");
 		assertEquals(1, records.size());
 		assertEquals("Logwood disabled: invalid configuration", records.getFirst().get("message"));
-		assertTrue(lastOutput.startsWith("{"));
+		assertEquals(
+				"""
+						{"time":"<time>","level":"ERROR","threadId":0,"logger":"io.jstach.logwood","message":"Logwood disabled: invalid configuration"}
+						""",
+				lastOutput);
 	}
 
 	@ParameterizedTest
@@ -323,21 +344,34 @@ class RuntimeTest {
 		assertEquals("structured", records.get(0).get("message"));
 	}
 
+	private static final String INVALID_CONFIGURATION = """
+			time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.logwood\tmessage:Logwood disabled: invalid configuration
+			""";
+
+	@ParameterizedTest
+	@ValueSource(strings = { "logwood.smoke.Smoke$BadConfig",
+			"logwood.smoke.Smoke$MdcConfig\nlogwood.smoke.Smoke$OtherConfig" })
+	void configurationFailuresDisableLoggingAndNeverExposeValues(String provider) throws Exception {
+		run("basic", false, provider);
+		assertEquals(INVALID_CONFIGURATION, lastOutput);
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "logging.level=not-a-level", "logging.journald=not-a-boolean", "logging.format=unknown" })
+	void invalidPropertiesDisableLogging(String property) throws Exception {
+		run("basic", true, null, property);
+		assertEquals(INVALID_CONFIGURATION, lastOutput);
+	}
+
 	@Test
-	void configurationFailuresDisableLoggingAndNeverExposeValues() throws Exception {
-		for (String provider : List.of("logwood.smoke.Smoke$BadConfig",
-				"logwood.smoke.Smoke$MdcConfig\nlogwood.smoke.Smoke$OtherConfig")) {
-			var records = run("basic", false, provider);
-			assertEquals(1, records.size());
-			assertEquals("Logwood disabled: invalid configuration", records.get(0).get("message"));
-		}
-		for (String property : List.of("logging.level=not-a-level", "logging.journald=not-a-boolean",
-				"logging.format=unknown"))
-			assertEquals(1, run("basic", true, null, property).size());
-		var records = run("basic", false, null, "logging.level.sample=not-a-level");
-		assertEquals(2, records.size());
-		assertEquals("Logwood disabled a logger: invalid level configuration", records.get(0).get("message"));
-		assertEquals("system", records.get(1).get("logger"));
+	void invalidLoggerConfigurationLeavesOtherLoggersEnabled() throws Exception {
+		run("basic", false, null, "logging.level.sample=not-a-level");
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.logwood\tmessage:Logwood disabled a logger: invalid level configuration
+						time:<time>\tlevel:WARN\tthread:main\tthreadId:<id>\tlogger:system\tmessage:hello world
+						""",
+				lastOutput);
 	}
 
 	@ParameterizedTest
@@ -346,7 +380,7 @@ class RuntimeTest {
 		var records = run("injection", modular, null);
 		assertEquals(2, records.size());
 		assertEquals("a\tb\nforged:yes\u001b[8m", records.get(0).get("logger"));
-		assertTrue(records.get(0).get("message").contains("arg\n\u2066"));
+		assertEquals("line\t\n\r\u001b[8m arg\n\u2066 \\n", records.get(0).get("message"));
 		assertFalse(records.get(0).containsKey("forged"));
 		assertEquals("true", records.get(1).get("truncated"));
 	}

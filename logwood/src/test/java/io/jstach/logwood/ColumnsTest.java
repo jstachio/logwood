@@ -18,80 +18,86 @@ import org.junit.jupiter.params.provider.ValueSource;
  */
 class ColumnsTest {
 
-	private static final String TIME = "\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d\\.\\d{3}Z";
-
-	private static final String THREAD = Thread.currentThread().getName() + "\t" + Thread.currentThread().threadId();
-
-	@Test
-	void everyFieldAsAColumn() throws Exception {
-		String output = run(Map.of("logging.ltsv.columns", "time,level,logger,thread,message"), "hello", null);
-		assertTrue(output.matches(TIME + "\tINFO\tapp\t" + THREAD + "\thello\n"), output);
+	static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> columns() {
+		return java.util.stream.Stream
+			.of(org.junit.jupiter.params.provider.Arguments.of("time,level,logger,thread,message", """
+					<time>\tINFO\tapp\t<thread>\t<id>\thello
+					"""), org.junit.jupiter.params.provider.Arguments.of("thread,message", """
+					<thread>\t<id>\thello\ttime:<time>\tlevel:INFO\tlogger:app
+					"""), org.junit.jupiter.params.provider.Arguments.of(" MSG , Timestamp ", """
+					hello\t<time>\tlevel:INFO\tthread:<thread>\tthreadId:<id>\tlogger:app
+					"""));
 	}
 
-	@Test
-	void unlistedFieldsFollowWithTheirLabels() throws Exception {
-		String output = run(Map.of("logging.ltsv.columns", "thread,message"), "hello", null);
-		assertTrue(output.matches(THREAD + "\thello\ttime:" + TIME + "\tlevel:INFO\tlogger:app\n"), output);
-	}
-
-	@Test
-	void namesAreCaseInsensitiveWithAliases() throws Exception {
-		String output = run(Map.of("logging.ltsv.columns", " MSG , Timestamp "), "hello", null);
-		assertTrue(output.matches("hello\t" + TIME + "\tlevel:INFO\tthread:.*\tlogger:app\n"), output);
+	@ParameterizedTest
+	@org.junit.jupiter.params.provider.MethodSource("columns")
+	void selectedColumnsComeFirstWithoutLabels(String columns, String expected) throws Exception {
+		assertEquals(expected, run(Map.of("logging.ltsv.columns", columns), "hello", null));
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings = { "", " " })
 	void blankMeansNoColumns(String value) throws Exception {
-		assertEquals(run(Map.of(), "hello", null).replaceAll(TIME, ""),
-				run(Map.of("logging.ltsv.columns", value), "hello", null).replaceAll(TIME, ""));
+		assertEquals("""
+				time:<time>\tlevel:INFO\tthread:<thread>\tthreadId:<id>\tlogger:app\tmessage:hello
+				""", run(Map.of("logging.ltsv.columns", value), "hello", null));
 	}
 
 	@ParameterizedTest
 	@ValueSource(strings = { "message,message", "level,LEVEL", "message,", "threadId", "message level" })
 	void invalidColumnsDisableLogging(String value) throws Exception {
-		String output = run(Map.of("logging.ltsv.columns", value), "hello", null);
-		assertTrue(output.contains("message:Logwood disabled: invalid configuration\n"), output);
-		assertFalse(output.contains("hello"));
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.logwood\tmessage:Logwood disabled: invalid configuration
+						""",
+				run(Map.of("logging.ltsv.columns", value), "hello", null));
 	}
 
 	@Test
 	void journaldOmitsTheTimeColumn() throws Exception {
-		String output = run(Map.of("logging.ltsv.columns", "time,level,message", "logging.journald", "true"), "hello",
-				null);
-		assertTrue(output.matches("<6>INFO\thello\tthread:.*\tlogger:app\n"), output);
+		assertEquals("""
+				<6>INFO\thello\tthread:<thread>\tthreadId:<id>\tlogger:app
+				""",
+				run(Map.of("logging.ltsv.columns", "time,level,message", "logging.journald", "true"), "hello", null));
 	}
 
 	@Test
 	void jsonLinesIgnoreTheOption() throws Exception {
-		assertEquals(run(Map.of("logging.format", "jsonl"), "hello", null).replaceAll(TIME, ""),
-				run(Map.of("logging.format", "jsonl", "logging.ltsv.columns", "message,level"), "hello", null)
-					.replaceAll(TIME, ""));
+		assertEquals("""
+				{"time":"<time>","level":"INFO","thread":"<thread>","threadId":<id>,"logger":"app","message":"hello"}
+				""", run(Map.of("logging.format", "jsonl", "logging.ltsv.columns", "message,level"), "hello", null));
 	}
 
 	@Test
 	void emptyFirstColumnIsEscapedWithStackTraceLines() throws Exception {
-		var lines = Map.of("logging.ltsv.columns", "message,level", "logging.ltsv.stacktrace", "lines");
 		var thrown = new IllegalStateException("boom");
 		thrown.setStackTrace(new StackTraceElement[] { new StackTraceElement("a.B", "c", "B.java", 1) });
-		String output = run(lines, "", thrown);
-		assertTrue(output.startsWith("\\e\tINFO\t"), output);
-		assertTrue(output.endsWith("\terror:java.lang.IllegalStateException: boom\n\t\tat a.B.c(B.java:1)\n"), output);
+		assertEquals(
+				"""
+						\\e\tINFO\ttime:<time>\tthread:<thread>\tthreadId:<id>\tlogger:app\terror:java.lang.IllegalStateException: boom
+						\t\tat a.B.c(B.java:1)
+						""",
+				run(Map.of("logging.ltsv.columns", "message,level", "logging.ltsv.stacktrace", "lines"), "", thrown));
+	}
 
-		assertTrue(run(lines, "\\e", null).startsWith("\\\\e\tINFO\t"));
-		assertTrue(run(lines, "x", null).startsWith("x\tINFO\t"));
-		// Without stack trace lines nothing follows a record, so an empty column stays
-		// empty.
-		assertTrue(run(Map.of("logging.ltsv.columns", "message,level"), "", null).startsWith("\tINFO\t"));
+	@ParameterizedTest
+	@org.junit.jupiter.params.provider.CsvSource({ "lines, '', \\e", "lines, \\e, \\\\e", "lines, x, x",
+			"inline, '', ''" })
+	void firstColumnEscaping(String stacktrace, String message, String expected) throws Exception {
+		assertEquals("""
+				%s\tINFO\ttime:<time>\tthread:<thread>\tthreadId:<id>\tlogger:app
+				""".formatted(expected), run(
+				Map.of("logging.ltsv.columns", "message,level", "logging.ltsv.stacktrace", stacktrace), message, null));
 	}
 
 	@Test
 	void failureDiagnosticsKeepTheirLabels() throws Exception {
-		String output = run(Map.of("logging.ltsv.columns", "message,level"),
-				core -> core.getLogger("x".repeat(2000)).isLoggable(System.Logger.Level.INFO));
-		assertTrue(output.matches("time:" + TIME
-				+ "\tlevel:ERROR\tthreadId:\\d+\tlogger:io.jstach.logwood\tmessage:Logwood disabled a logger: invalid level configuration\n"),
-				output);
+		assertEquals(
+				"""
+						time:<time>\tlevel:ERROR\tthreadId:<id>\tlogger:io.jstach.logwood\tmessage:Logwood disabled a logger: invalid level configuration
+						""",
+				run(Map.of("logging.ltsv.columns", "message,level"),
+						core -> core.getLogger("x".repeat(2000)).isLoggable(System.Logger.Level.INFO)));
 	}
 
 	private static String run(Map<String, String> properties, String message, Throwable thrown) throws Exception {
@@ -123,7 +129,11 @@ class ColumnsTest {
 			System.setOut(stdout);
 			before.forEach(ColumnsTest::set);
 		}
-		return bytes.toString(StandardCharsets.UTF_8);
+		return GoldenOutput.normalize(bytes.toString(StandardCharsets.UTF_8))
+			.replace("\t" + Thread.currentThread().getName() + "\t" + Thread.currentThread().threadId() + "\t",
+					"\t<thread>\t<id>\t")
+			.replaceFirst("^" + java.util.regex.Pattern.quote(Thread.currentThread().getName()) + "\t"
+					+ Thread.currentThread().threadId() + "\t", "<thread>\t<id>\t");
 	}
 
 	private static void set(String key, String value) {

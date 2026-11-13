@@ -137,8 +137,9 @@ class RecordEncoderTest {
 		out.throwable(error);
 		String record = out.finish();
 		assertEquals(1, reads.get());
-		assertTrue(record.contains("Caused by: java.lang.IllegalArgumentException: cause"));
-		assertFalse(record.contains("throwable failed"));
+		assertEquals("""
+				error:%s: outer\\nCaused by: java.lang.IllegalArgumentException: cause
+				""".formatted(error.getClass().getName()), record);
 	}
 
 	@Test
@@ -149,8 +150,8 @@ class RecordEncoderTest {
 			out.extra(String.valueOf((char) i), "v");
 			String record = out.finish();
 			assertEquals(1, record.chars().filter(c -> c == ':').count());
-			assertFalse(record.contains("\t"));
 			String label = record.substring(0, record.indexOf(':'));
+			assertEquals(label + ":v\n", record);
 			assertTrue(label.matches("[a-zA-Z0-9_.%\\-]+"));
 			assertTrue(labels.add(label), "Key collision " + i);
 		}
@@ -304,6 +305,13 @@ class RecordEncoderTest {
 				""", out.finish());
 	}
 
+	// Repetitive fixture data; no production encoder is used to make expectations.
+	private static String fields(String prefix, int first, int limit, String value) {
+		return java.util.stream.IntStream.range(first, limit)
+			.mapToObj(i -> prefix + i + ":" + value)
+			.collect(java.util.stream.Collectors.joining("\t"));
+	}
+
 	@Test
 	void keyValueCallbacksAreBoundedAndTheirConsumerExpiresAfterTheCall() {
 		var retained = new java.util.concurrent.atomic.AtomicReference<java.util.function.BiConsumer<@Nullable String, @Nullable String>>();
@@ -320,10 +328,9 @@ class RecordEncoderTest {
 		retained.get().accept("late", "ignored");
 		out.writeKeyValues();
 		String record = out.finish();
-		assertEquals(33, record.stripTrailing().split("\t").length);
-		assertTrue(record.endsWith("\ttruncated:true\n"));
-		assertFalse(record.contains("late"));
-		assertFalse(record.contains("key32:"));
+		assertEquals("""
+				%s\ttruncated:true
+				""".formatted(fields("key", 0, 32, "value")), record);
 	}
 
 	@Test
@@ -371,12 +378,9 @@ class RecordEncoderTest {
 		out.eventValue("x".repeat(1_000_000), hostile);
 		out.writeKeyValues();
 		String record = out.finish();
-		assertEquals(65, record.stripTrailing().split("\t").length);
-		assertTrue(record.contains("context31:value"));
-		assertTrue(record.contains("event31:value"));
-		assertFalse(record.contains("overflow"));
-		assertFalse(record.contains("toString failed"));
-		assertTrue(record.endsWith("\ttruncated:true\n"));
+		assertEquals("""
+				%s\t%s\ttruncated:true
+				""".formatted(fields("context", 0, 32, "value"), fields("event", 0, 32, "value")), record);
 	}
 
 	@Test
@@ -398,10 +402,9 @@ class RecordEncoderTest {
 		});
 		out.writeKeyValues();
 		String record = out.finish();
-		assertEquals(33, record.stripTrailing().split("\t").length);
-		assertTrue(record.startsWith("key0:override\t"));
-		assertFalse(record.contains("overflow"));
-		assertTrue(record.endsWith("\ttruncated:true\n"));
+		assertEquals("""
+				key0:override\t%s\ttruncated:true
+				""".formatted(fields("key", 1, 32, "original")), record);
 	}
 
 	@Test
@@ -412,15 +415,21 @@ class RecordEncoderTest {
 			out.text("\u001b".repeat(1_000_000));
 			String record = out.finish();
 			assertTrue(record.length() <= RecordEncoder.RECORD);
-			assertTrue(record.endsWith("\ttruncated:true\n"));
+			assertEquals("""
+					m:%s\ttruncated:true
+					""".formatted("\\u001b".repeat(682)), record);
 			Object[] array = new Object[1];
 			array[0] = array;
 			out = new RecordEncoder(-1, false);
 			out.start("m");
 			out.object(array, 0);
-			assertTrue(out.finish().contains("truncated:true"));
+			assertEquals("""
+					m:[[[[[[[[[...]]]]]]]]]\ttruncated:true
+					""", out.finish());
 			var a = new IllegalStateException("a");
 			var b = new IllegalStateException("b");
+			a.setStackTrace(new StackTraceElement[0]);
+			b.setStackTrace(new StackTraceElement[0]);
 			a.initCause(b);
 			b.initCause(a);
 			a.addSuppressed(b);
@@ -430,7 +439,17 @@ class RecordEncoderTest {
 			out.throwable(a);
 			record = out.finish();
 			assertTrue(record.length() <= RecordEncoder.RECORD);
-			assertTrue(record.endsWith("\ttruncated:true\n"));
+			assertEquals("""
+					error:java.lang.IllegalStateException: a\
+					\\nSuppressed: java.lang.IllegalStateException: b\
+					\\nSuppressed: java.lang.IllegalStateException: a\
+					\\nSuppressed: java.lang.IllegalStateException: b\
+					\\nSuppressed: java.lang.IllegalStateException: a\
+					\\nSuppressed: java.lang.IllegalStateException: b\
+					\\nSuppressed: java.lang.IllegalStateException: a\
+					\\nSuppressed: java.lang.IllegalStateException: b\
+					%s\ttruncated:true
+					""".formatted("\\nCaused by: [throwable limit]".repeat(8)), record);
 		});
 	}
 
@@ -448,7 +467,9 @@ class RecordEncoderTest {
 		out = new RecordEncoder(-1, false);
 		out.start("m");
 		out.system("{2147483647}", new Object[] { 1 });
-		assertTrue(out.finish().endsWith(" [format rejected]\ttruncated:true\n"));
+		assertEquals("""
+				m:{2147483647} [format rejected]\ttruncated:true
+				""", out.finish());
 		out = new RecordEncoder(-1, false);
 		for (int i = 0; i < 1000; i++) {
 			out.start("x" + i);

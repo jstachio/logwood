@@ -107,19 +107,29 @@ class RecordEncoderLimitTest {
 		assertEquals("{\"m\":\"" + x(4095) + "\",\"truncated\":true}\n", out.finish());
 	}
 
+	// These fixtures contain three full values and one partial value. Keep the
+	// expected prefix independent of filled(), which exercises the real encoder.
+	private static String ltsvPrefix(int size) {
+		return ("f:" + x(4096) + "\t").repeat(3) + "f:" + x(size - 12299);
+	}
+
+	private static String jsonPrefix(int size) {
+		return "{" + ("\"f\":\"" + x(4096) + "\",").repeat(3) + "\"f\":\"" + x(size - 12315);
+	}
+
 	@Test
 	void ltsvFieldStartsOnlyWhileItsLabelFits() {
 		var out = filled(false, CONTENT - 3);
 		out.start("b");
 		out.text("v");
 		String record = out.finish();
-		assertTrue(record.endsWith("x\tb:" + MARKER), record.substring(record.length() - 40));
+		assertEquals(ltsvPrefix(CONTENT - 3) + "\tb:" + MARKER, record);
 		assertEquals(CONTENT + MARKER.length(), record.length());
 
 		out = filled(false, CONTENT - 2);
 		out.start("b");
 		record = out.finish();
-		assertTrue(record.endsWith("x" + MARKER));
+		assertEquals(ltsvPrefix(CONTENT - 2) + MARKER, record);
 		assertEquals(CONTENT - 2 + MARKER.length(), record.length());
 	}
 
@@ -128,11 +138,11 @@ class RecordEncoderLimitTest {
 		var out = filled(true, CONTENT - 7);
 		out.start("b");
 		out.text("v");
-		assertTrue(out.finish().endsWith("x\",\"b\":\"\",\"truncated\":true}\n"));
+		assertEquals(jsonPrefix(CONTENT - 7) + "\",\"b\":\"\",\"truncated\":true}\n", out.finish());
 
 		out = filled(true, CONTENT - 6);
 		out.start("b");
-		assertTrue(out.finish().endsWith("x\",\"truncated\":true}\n"));
+		assertEquals(jsonPrefix(CONTENT - 6) + "\",\"truncated\":true}\n", out.finish());
 	}
 
 	@Test
@@ -141,24 +151,23 @@ class RecordEncoderLimitTest {
 		String key = "\u0001".repeat(10), name = "\\u0001".repeat(10);
 		var out = filled(true, CONTENT - 66);
 		out.extra(key, "v");
-		assertTrue(out.finish().endsWith("x\",\"" + name + "\":\"\",\"truncated\":true}\n"));
+		assertEquals(jsonPrefix(CONTENT - 66) + "\",\"" + name + "\":\"\",\"truncated\":true}\n", out.finish());
 
 		out = filled(true, CONTENT - 65);
 		out.extra(key, "v");
 		String record = out.finish();
-		assertTrue(record.endsWith("x\",\"truncated\":true}\n"));
-		assertFalse(record.contains("u0001"));
+		assertEquals(jsonPrefix(CONTENT - 65) + "\",\"truncated\":true}\n", record);
 	}
 
 	@Test
 	void numberFieldsReserveRoomForTheLongestLong() {
 		var out = filled(false, CONTENT - 23);
 		out.numberField("n", Long.MIN_VALUE);
-		assertTrue(out.finish().endsWith("x\tn:-9223372036854775808\n"));
+		assertEquals(ltsvPrefix(CONTENT - 23) + "\tn:-9223372036854775808\n", out.finish());
 
 		out = filled(false, CONTENT - 22);
 		out.numberField("n", Long.MIN_VALUE);
-		assertTrue(out.finish().endsWith("x" + MARKER));
+		assertEquals(ltsvPrefix(CONTENT - 22) + MARKER, out.finish());
 	}
 
 	@Test
@@ -259,7 +268,6 @@ class RecordEncoderLimitTest {
 
 	private static String formatted(String pattern, Object... args) {
 		String record = system(pattern, args);
-		assertFalse(record.contains("format "), record);
 		return decode(record.substring(2, record.length() - 1));
 	}
 
@@ -335,10 +343,19 @@ class RecordEncoderLimitTest {
 
 	@Test
 	void systemPatternsNestBracesEightDeep() {
-		// JDK 21 cannot parse a choice nested in a choice, so only the depth check is
-		// compared, not the formatted output.
-		assertFalse(system(choices(8), 0).contains("[format rejected]"));
-		assertTrue(system(choices(9), 0).endsWith(" [format rejected]" + MARKER));
+		// MessageFormat's support for nested choices varies by JDK. Compare the
+		// complete accepted result or diagnostic against that JDK's formatter.
+		String expected;
+		try {
+			expected = "m:" + MessageFormat.format(choices(8), 0) + "\n";
+		}
+		catch (IllegalArgumentException e) {
+			expected = "m:" + choices(8) + " [MessageFormat failed: " + e.getMessage() + "]\n";
+		}
+		assertEquals(expected, system(choices(8), 0));
+		assertEquals("""
+				m:%s [format rejected]\ttruncated:true
+				""".formatted(choices(9)), system(choices(9), 0));
 	}
 
 	@ParameterizedTest
@@ -373,13 +390,13 @@ class RecordEncoderLimitTest {
 
 		var scaled = new BigDecimal(BigInteger.ONE, 4096);
 		assertEquals("0", formatted("{0,number,#}", scaled));
-		assertTrue(system("{0,number,#}", new BigDecimal(BigInteger.ONE, 4097))
-			.endsWith(" [MessageFormat failed: Cannot format given Object as a Number]\n"));
-		assertTrue(system("{0,number,#}", new BigDecimal(BigInteger.ONE, -4097))
-			.endsWith(" [MessageFormat failed: Cannot format given Object as a Number]\n"));
+		assertEquals("m:{0,number,#} [MessageFormat failed: Cannot format given Object as a Number]\n",
+				system("{0,number,#}", new BigDecimal(BigInteger.ONE, 4097)));
+		assertEquals("m:{0,number,#} [MessageFormat failed: Cannot format given Object as a Number]\n",
+				system("{0,number,#}", new BigDecimal(BigInteger.ONE, -4097)));
 		var wide = new BigDecimal(BigInteger.ONE.shiftLeft(4096), 0);
-		assertTrue(system("{0,number,#}", wide)
-			.endsWith(" [MessageFormat failed: Cannot format given Object as a Number]\n"));
+		assertEquals("m:{0,number,#} [MessageFormat failed: Cannot format given Object as a Number]\n",
+				system("{0,number,#}", wide));
 	}
 
 	@Test
@@ -470,40 +487,46 @@ class RecordEncoderLimitTest {
 				\tat a.B.z(B.java:0)""", decodedTrace(thrown));
 	}
 
-	@Test
-	void stackTracesShowAtMostSixtyFourFramesInTotal() {
-		String record = trace(error("boom", frames(64)));
-		assertFalse(record.contains("frame limit"));
-		assertTrue(record.endsWith("(B.java:64)\n"));
+	private static String expectedFrames(int count) {
+		return java.util.stream.IntStream.range(0, count)
+			.mapToObj(i -> "\\n\\tat a.B.m%d(B.java:%d)".formatted(i, i + 1))
+			.collect(java.util.stream.Collectors.joining());
+	}
 
-		record = trace(error("boom", frames(65)));
-		assertTrue(record.endsWith("(B.java:64)\\n[frame limit]" + MARKER));
-
-		var outer = error("outer", frames(60));
-		outer.initCause(error("cause", frames(5)));
-		record = trace(outer);
-		assertTrue(record.endsWith("cause\\n\\tat a.B.m0(B.java:1)\\n\\tat a.B.m1(B.java:2)"
-				+ "\\n\\tat a.B.m2(B.java:3)\\n\\tat a.B.m3(B.java:4)\\n[frame limit]" + MARKER));
+	@ParameterizedTest
+	@ValueSource(ints = { 64, 65 })
+	void stackTracesShowAtMostSixtyFourFramesInTotal(int count) {
+		assertEquals("""
+				error:java.lang.IllegalStateException: boom%s%s
+				""".formatted(expectedFrames(64), count == 64 ? "" : "\\n[frame limit]\ttruncated:true"),
+				trace(error("boom", frames(count))));
 	}
 
 	@Test
-	void eachThrowableShowsAtMostFourSuppressed() {
-		var four = error("outer");
-		for (int i = 0; i < 4; i++)
-			four.addSuppressed(error("s" + i));
-		String record = trace(four);
-		assertEquals(4, record.split("Suppressed: ", -1).length - 1);
-		for (int i = 0; i < 4; i++)
-			assertTrue(record.contains("Suppressed: java.lang.IllegalStateException: s" + i), record);
-		assertFalse(record.contains("truncated"));
+	void causesShareTheFrameBudget() {
+		var outer = error("outer", frames(60));
+		outer.initCause(error("cause", frames(5)));
+		assertEquals(
+				"""
+						error:java.lang.IllegalStateException: outer%s\\nCaused by: java.lang.IllegalStateException: cause%s\\n[frame limit]\ttruncated:true
+						"""
+					.formatted(expectedFrames(60), expectedFrames(4)),
+				trace(outer));
+	}
 
-		var five = error("outer");
-		for (int i = 0; i < 5; i++)
-			five.addSuppressed(error("s" + i));
-		record = trace(five);
-		assertEquals(4, record.split("Suppressed: ", -1).length - 1);
-		assertFalse(record.contains("s4"));
-		assertTrue(record.endsWith(MARKER));
+	@ParameterizedTest
+	@ValueSource(ints = { 4, 5 })
+	void eachThrowableShowsAtMostFourSuppressed(int count) {
+		var outer = error("outer");
+		for (int i = 0; i < count; i++)
+			outer.addSuppressed(error("s" + i));
+		assertEquals("""
+				error:java.lang.IllegalStateException: outer\
+				\\nSuppressed: java.lang.IllegalStateException: s0\
+				\\nSuppressed: java.lang.IllegalStateException: s1\
+				\\nSuppressed: java.lang.IllegalStateException: s2\
+				\\nSuppressed: java.lang.IllegalStateException: s3%s
+				""".formatted(count == 4 ? "" : "\ttruncated:true"), trace(outer));
 	}
 
 	private static Throwable chain(int length) {
@@ -516,13 +539,20 @@ class RecordEncoderLimitTest {
 		return thrown;
 	}
 
-	@Test
-	void throwableGraphsShowAtMostEightThrowables() {
-		String record = trace(chain(8));
-		assertTrue(record.endsWith("Caused by: java.lang.IllegalStateException: e7\n"), record);
-
-		record = trace(chain(9));
-		assertTrue(record.endsWith("e7\\nCaused by: [throwable limit]" + MARKER), record);
+	@ParameterizedTest
+	@ValueSource(ints = { 8, 9 })
+	void throwableGraphsShowAtMostEightThrowables(int count) {
+		assertEquals("""
+				error:java.lang.IllegalStateException: e0\
+				\\nCaused by: java.lang.IllegalStateException: e1\
+				\\nCaused by: java.lang.IllegalStateException: e2\
+				\\nCaused by: java.lang.IllegalStateException: e3\
+				\\nCaused by: java.lang.IllegalStateException: e4\
+				\\nCaused by: java.lang.IllegalStateException: e5\
+				\\nCaused by: java.lang.IllegalStateException: e6\
+				\\nCaused by: java.lang.IllegalStateException: e7%s
+				""".formatted(count == 8 ? "" : "\\nCaused by: [throwable limit]\ttruncated:true"),
+				trace(chain(count)));
 	}
 
 	@Test
@@ -535,13 +565,19 @@ class RecordEncoderLimitTest {
 		var outer = error("outer");
 		outer.addSuppressed(a);
 		outer.addSuppressed(b);
-		String record = trace(outer);
-		assertTrue(record.endsWith("b0\n"), record);
-
+		String expected = """
+				error:java.lang.IllegalStateException: outer\
+				\\nSuppressed: java.lang.IllegalStateException: a\
+				\\nSuppressed: java.lang.IllegalStateException: a0\
+				\\nSuppressed: java.lang.IllegalStateException: a1\
+				\\nSuppressed: java.lang.IllegalStateException: a2\
+				\\nSuppressed: java.lang.IllegalStateException: a3\
+				\\nSuppressed: java.lang.IllegalStateException: b\
+				\\nSuppressed: java.lang.IllegalStateException: b0%s
+				""";
+		assertEquals(expected.formatted(""), trace(outer));
 		outer.addSuppressed(error("c"));
-		record = trace(outer);
-		assertTrue(record.endsWith("b0" + MARKER), record);
-		assertFalse(record.contains(": c"));
+		assertEquals(expected.formatted("\ttruncated:true"), trace(outer));
 	}
 
 	@Test
